@@ -1,0 +1,2251 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>אוספי מוזיאון ישראל</title>
+  <meta name="description" content="אסופת מעגל — יצירות מתוך אוספי מוזיאון ישראל המאורגנות סביב מוטיב העיגול." />
+  <link rel="icon" type="image/svg+xml" href="public/images/favicon.svg" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <!-- Same Tailwind-CDN caveat as index.html: no custom fontFamily config here
+       either — see index.html's own note for why that silently doesn't work
+       for React-rendered classNames. Font is applied via inline style
+       (FONT_THEBASICS) instead. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="artworks-data.js"></script>
+  <script src="search-engine.js"></script>
+  <style>
+    @view-transition {
+      navigation: auto;
+    }
+    ::view-transition-group(root) {
+      animation-duration: 0.42s;
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      mix-blend-mode: normal;
+    }
+    /* The nav bar carries a persistent view-transition-name (site-header) so
+       it morphs instead of cross-fading — but the browser still runs its
+       default old/new fade *underneath* that morph, and since the two
+       snapshots are almost-but-not-quite pixel-identical (font hinting,
+       subpixel rounding) that reads as a flicker. Freezing it removes that. */
+    ::view-transition-old(site-header),
+    ::view-transition-new(site-header) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+    /* Also freeze the group's own position/size interpolation — otherwise
+       even a 1px geometry mismatch between two pages' headers (they're
+       hand-tuned per page) makes it visibly slide during the crossfade. */
+    ::view-transition-group(site-header) {
+      animation: none;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Bold.otf') format('opentype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Masada';
+      src: url('public/fonts/Masada-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html, body {
+      background-color: #fffdfa;
+      color: #28282a;
+      font-family: 'TheBasics', 'Segoe UI', Arial, sans-serif;
+      font-weight: 500;
+    }
+
+    ::selection {
+      background-color: #28282a;
+      color: #fffdfa;
+    }
+  </style>
+</head>
+<body>
+  <!-- Static, JS-free header: React/ReactDOM/Babel-standalone all load from a
+       CDN and the whole page script has to be parsed and transpiled before
+       React paints anything, so on every navigation there's a real gap where
+       the document is blank and the nav bar vanishes. This markup needs no
+       JS at all, so it paints on the very first frame and carries the
+       site-header view-transition name itself (the React-rendered header
+       below no longer claims it — a name can only be claimed by one element
+       at a time). It sits one z-index below the real header and is never
+       removed; once React mounts, its own header simply covers this one, so
+       there's no visible swap — as long as both agree on exact geometry
+       (right/top/width/height/gap below), which is why those are hardcoded
+       to match every page's own HeaderWordmarkLink/TopNav values exactly
+       rather than copy-pasted loosely. -->
+  <div style="position:fixed;inset-inline:0;top:0;z-index:29;display:flex;justify-content:center;pointer-events:none;view-transition-name:site-header;">
+    <div dir="rtl" style="position:relative;width:min(1728px,100vw);">
+      <a href="index.html" style="position:absolute;right:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.017940);width:calc(min(1728px,100vw) * 0.142940);height:calc(min(1728px,100vw) * 0.014468);pointer-events:auto;display:block;">
+        <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style="width:100%;height:100%;display:block;" />
+      </a>
+      <nav dir="rtl" style="position:absolute;inset-inline-end:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.018519);display:flex;align-items:center;gap:20px;pointer-events:auto;font-family:'TheBasics','Segoe UI',Arial,sans-serif;font-weight:500;font-size:calc(min(1728px,100vw) * 0.011574);letter-spacing:0.2px;">
+        <a href="index.html#about" style="color:#28282a;text-decoration:none;">אסופות</a>
+        <a href="collection-index.html" style="color:#28282a;text-decoration:none;">אינדקס</a>
+        <a href="search.html" style="color:#28282a;text-decoration:none;">חיפוש</a>
+        <a href="about.html" style="color:#28282a;text-decoration:none;">אודות</a>
+      </nav>
+    </div>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useRef, useEffect } = React;
+
+    const FONT_THEBASICS = "TheBasics, \"Segoe UI\", Arial, sans-serif";
+    // Masada (public/fonts/Masada-Medium.otf, @font-face above) is used for
+    // the footer's about-copy paragraph specifically, distinct from the
+    // TheBasics webfont used everywhere else on the page.
+    const FONT_MASADA = "Masada, \"Segoe UI\", Arial, sans-serif";
+
+    // Every visit to this page lazy-loads and fades in each grid tile as it
+    // scrolls into view (see Card / scheduleTileReveal) — not just the
+    // first time this browser has hit the site.
+    const TILE_FADE_MS = 500;
+
+    // The big footer wordmark has two "icon slot" glyphs baked into the
+    // logo artwork itself (a bowtie/triangle-pair and a square-with-lens
+    // shape, between מוזיאון and ישראל) — public/images/wordmark-blank.svg
+    // is the same logo with just those two shapes removed, so these can be
+    // overlaid as real <img> elements and cycled instead. Coordinates below
+    // are those two paths' bounding boxes in the source SVG's 1622×165
+    // viewBox, converted to the footer instance's actual rendered box
+    // (1679×170 — see the wordmark <img>'s own width/height) via
+    // scaleX = 1679/1622, scaleY = 170/165.
+    // Same 5 reels the home page's Hero randomly picks from (see index.html's
+    // own HERO_VIDEOS comment for why vertical_landscape.mp4 stands in for
+    // the motif's native 9:16 vertical.mp4 here — every entry is 16:9).
+    const HERO_VIDEOS = [
+      "public/videos/circle_1.mp4",
+      "public/videos/vertical_landscape.mp4",
+      "public/videos/window_1.mp4",
+      "public/videos/motion.mp4",
+      "public/videos/shard_1.mp4",
+    ];
+
+    const WORDMARK_HOVER_FADE_MS = 200;
+
+    // Small header wordmark: hovering plays a random one of the home page's
+    // hero reels full-screen behind it (re-picked fresh each time the hover
+    // starts, like the hero re-picks on every page load) — everything else
+    // on the page is covered, leaving only the wordmark itself visible on
+    // top. Clicking it goes back to the home page; sessionStorage flags are
+    // set first so index.html (a) skips its normal thumbnail-expand intro
+    // (started/revealed in index.html's App) and instead just fades straight
+    // in, and (b) has its Hero play this exact same reel (not a fresh random
+    // pick) so the fade lands on matching footage instead of cutting to a
+    // different one.
+    function HeaderWordmarkLink({ style }) {
+      const [video, setVideo] = useState(null);
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (video) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          closeTimer.current = setTimeout(() => setMounted(false), WORDMARK_HOVER_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [video]);
+
+      return (
+        <a
+          href="index.html"
+          className="absolute pointer-events-auto"
+          style={{ ...style, zIndex: 41 }}
+          onMouseEnter={() => setVideo(HERO_VIDEOS[Math.floor(Math.random() * HERO_VIDEOS.length)])}
+          onMouseLeave={() => setVideo(null)}
+          onClick={() => {
+            if (video) sessionStorage.setItem("heroVideo", video);
+          }}
+        >
+          <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%", display: "block", position: "relative", zIndex: 2 }} />
+          {mounted && (
+            <div
+              className="fixed inset-0 overflow-hidden pointer-events-none"
+              style={{ zIndex: 1, opacity: visible ? 1 : 0, transition: `opacity ${WORDMARK_HOVER_FADE_MS}ms ease` }}
+            >
+              <video key={video} src={video} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+            </div>
+          )}
+        </a>
+      );
+    }
+
+    const WORDMARK_ICONS = [
+      "public/images/icon-circle.svg",
+      "public/images/icon-verticality.svg",
+      "public/images/icon-gate.svg",
+      "public/images/icon-motion.svg",
+      "public/images/icon-fragment.svg",
+    ];
+    const WORDMARK_ICON_SLOTS = [
+      { left: 1135.5, top: 30.3, width: 122.4, height: 118.9 }, // bowtie/triangle-pair slot
+      { left: 475.3, top: 30.3, width: 117.4, height: 118.9 }, // square/lens slot
+    ];
+    // Fast, hard cut — no fade — matching the reference's rapid flicker
+    // between icons (a new one every ~300ms with no crossfade at all).
+    const WORDMARK_ICON_INTERVAL_MS = 200;
+
+    function CyclingIcon({ src, style }) {
+      return <img src={src} alt="" aria-hidden="true" style={{ ...style, objectFit: "contain" }} />;
+    }
+
+    function AnimatedFooterWordmark({ style, id }) {
+      const [tick, setTick] = useState(0);
+      useEffect(() => {
+        const id = setInterval(() => setTick((t) => t + 1), WORDMARK_ICON_INTERVAL_MS);
+        return () => clearInterval(id);
+      }, []);
+      return (
+        <div id={id} className="absolute" style={{ ...style, position: "absolute" }}>
+          <img src="public/images/wordmark-blank.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%" }} />
+          {WORDMARK_ICON_SLOTS.map((slot, i) => (
+            <CyclingIcon
+              key={i}
+              src={WORDMARK_ICONS[(tick + i * 2) % WORDMARK_ICONS.length]}
+              style={{ position: "absolute", left: scalePx(slot.left), top: scalePx(slot.top), width: scalePx(slot.width), height: scalePx(slot.height) }}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    const UNDERLINE_OFFSET = "0.08em";
+    const UNDERLINE_THICKNESS = "0.1em";
+
+    // Same width-relative scaling system as index.html — this page is built
+    // from the same 1728px-wide Figma frame, so reusing it keeps this page
+    // scaling consistently with the rest of the site.
+    const FRAME_W = 1728;
+    const scalePx = (px) => `calc(min(${FRAME_W}px, 100vw) * ${(px / FRAME_W).toFixed(6)})`;
+    const CANVAS_W = "w-[1728px] max-w-full";
+
+    // Plain nav links (no "אסופות" — that one's rendered separately, always
+    // underlined, since it's this page's own current section).
+    const NAV_ITEMS = [
+      { label: "אינדקס", href: "collection-index.html" },
+      { label: "חיפוש", href: "#search" },
+      { label: "אודות", href: "about.html" },
+    ];
+
+    // The other 4 motif tags link back to the home page's paragraph, where
+    // hovering each still opens its own video preview — this page only
+    // exists for מעגל so far, the other 4 don't have collection pages yet.
+    const MOTIF_TAGS = [
+      { label: "מעגל", current: true },
+      { label: "אנכיות", href: "collection-verticality.html" },
+      { label: "שער", href: "collection-gate.html" },
+      { label: "תנועה", href: "collection-motion.html" },
+      { label: "שבר", href: "collection-shard.html" },
+    ];
+
+    // Hardcoded row breaks (not natural CSS wrap) so the layout matches the
+    // reference exactly regardless of font metrics/viewport.
+    const FILTER_ROWS = [
+      ["אדום", "כחול", "ירוק", "זהב"],
+      ["שחור", "לבן", "אבן", "זכוכית"],
+      ["מתכת", "עץ", "בד וטקסטיל"],
+      ["קרמיקה", "צבעי־שמן"],
+    ];
+
+    // Only "אדום" is wired to an actual filtered result so far — the other
+    // filter words render (per FILTER_ROWS above) but don't do anything yet.
+    // Two separate interactions layer on top of each other:
+    //  - HOVERING "אדום" is just a transient preview: its 7 matches pull
+    //    into a loose cluster at the center of the viewport (Card's
+    //    hoverMagnetTransform below) while everything else dims, and it all
+    //    snaps back the instant the mouse leaves.
+    //  - CLICKING it commits: the 7 matches fly from wherever they normally
+    //    sit to this fixed arrangement (RED_FILTER_LAYOUT), exact boxes
+    //    lifted from the dedicated Figma frame for this state ("סינון מעגל
+    //    + אדום", node 1230:1326) rather than derived from the normal
+    //    grid's own per-card x/y/w/h — that frame lays these 7 out
+    //    completely differently (bigger, cover-cropped instead of
+    //    contain-fit) from how they sit in the default collage, so the two
+    //    can't share one set of boxes. Every other card fades out. ניקוי
+    //    reverses it — everything flies/fades back.
+    // silver-hoard-bead is the one exception to the cover-crop swap: its
+    // box there is pixel-identical (790×953) to its normal-grid box, just
+    // moved, so it just slides via the plain Card component (position
+    // override only) instead of RedFilterCard below — that keeps its
+    // natural (non-cropped) image placement, its caption-inside-the-box
+    // layout, and its hover/typewriter behavior all working unmodified.
+    const FILTER_MATCHES = {
+      "אדום": [
+        "silver-hoard-bead",
+        "sun-croton",
+        "red-sun",
+        "athena-engraving",
+        "pastilli-chair",
+        "jericho-first",
+        "beheaded-sun",
+      ],
+      "אבן": ["silver-hoard-bead", "athena-engraving", "negev"],
+      // Below: populated the same way as אדום/אבן (real per-image visual
+      // inspection, no forced matches) but without a Figma-matched commit
+      // layout — these only drive the hover-magnet preview (see FilterMenu/
+      // Card), not COMMITTABLE_FILTERS, so clicking them does nothing yet.
+      "כחול": ["air-iron-water", "suppression", "sunset-arenys"],
+      "ירוק": ["engraved-plate", "siren-mirror", "launch", "suppression", "even-more"],
+      "זהב": ["quipu", "pomegranate-bottle", "seder-plate", "negev", "annunciation", "sunset-arenys"],
+      "שחור": ["bicycle-wheel", "paris-graffiti", "stalactite", "titus-denarius", "spindle-whorl", "optical-parable", "launch"],
+      "לבן": ["bicycle-wheel"],
+      // "זכוכית" (glass): no artwork in this collection is actually glass —
+      // left unset rather than forced, so the word stays inert (matches the
+      // "show nothing if nothing fits" rule).
+      "מתכת": ["sun-croton", "siren-mirror", "titus-denarius", "torah-crown", "bicycle-wheel", "silver-hoard-ring", "engraved-plate"],
+      "עץ": ["bicycle-wheel"],
+      "בד וטקסטיל": ["quipu"],
+      "קרמיקה": ["seder-plate", "pomegranate-bottle"],
+      "צבעי־שמן": ["air-iron-water", "suppression", "annunciation", "sunset-arenys", "even-more", "red-sun"],
+    };
+    const MAGNET_SCALE = 1.4;
+    const MAGNET_CLUSTER_RADIUS = 70;
+    // x:3 puts the bead's left edge on the same vertical line as the
+    // "אודות" nav item (which sits at code x=24, and the bead image has a
+    // 21px pad inside its box → card x 3 + 21 = 24). Caption spans the full
+    // raw photo width (no insets) — per reference, "the artwork's edge" for
+    // this piece means the photo's own edge, not the donut's real (much
+    // narrower) silhouette inside it.
+    const RED_FILTER_BEAD_POS = { x: 3, y: 434 };
+    const RED_FILTER_LAYOUT = [
+      // x is 681, not 723 (flush with sun-croton's box) — img10.png bakes in
+      // a wide white-mat margin before its black frame starts (~19.4% of the
+      // photo's own width), so a box-edge match left the frame visibly
+      // adrift to the right of where sun-croton's photo becomes visible past
+      // the bead. 681 gives the frame the same small breathing gap past the
+      // bead's own right edge (772) that sun-croton's photo has before its
+      // own content reads as visibly distinct. capInsetR/L (~19.4% of the
+      // 504-wide box, matching img10.png's own real left/right frame
+      // fraction) pull the caption in from the box's raw edges to the
+      // painting's actual framed edges — the wide white mat around it means
+      // "the artwork's edge" here is the frame, not the photo's own bounds.
+      { id: "red-sun", x: 681, y: 905, w: 504, h: 387, capInsetR: 98, capInsetL: 98 },
+      { id: "sun-croton", x: 723, y: 444, w: 624, h: 430, capInsetR: 57, capInsetL: 61 },
+      // capInsetR/L pull the caption in to the diagonal-cut black square's
+      // real edges (CONTENT_FRAC["img8.png"] = [0.200, 0.797], already
+      // measured for the normal grid and confirmed against the raw file —
+      // converted into this 422-wide box).
+      { id: "athena-engraving", x: -61, y: 1387, w: 422, h: 325, capInsetR: 86, capInsetL: 84 },
+      // capDY pulls the caption up — img4.png has a lot of empty studio
+      // floor/shadow below the chair itself, and since its aspect ratio is
+      // a near-exact match for this box's, object-fit:cover shows nearly
+      // the whole photo (floor included) instead of cropping it away.
+      // descOffsetY: this box (881 tall) is much taller than the card's
+      // normal-grid box (~539 rendered image height) that the description's
+      // small fixed +12 offset was tuned against — the SAME 12px reads as a
+      // much smaller fraction of this bigger box, leaving a bigger blank gap
+      // above the chair. 8 keeps the offset-to-box-height ratio the same as
+      // the normal grid (12/539 ≈ 8/881) rather than closing the gap outright.
+      { id: "pastilli-chair", x: 410, y: 1387, w: 1147, h: 881, capDY: -9, descOffsetY: 8 },
+      // capDY: -253 reuses the same offset already measured for this image
+      // in the normal grid (CARDS_BY_ID's own jericho-first entry) — img7.png
+      // has a lot of empty white space above/below the mosaic itself, and
+      // since the box's aspect nearly matches the photo's, cover-fit shows
+      // that whitespace instead of cropping it away.
+      { id: "jericho-first", x: 597, y: 2025, w: 1106, h: 850, capDY: -266 },
+      // capDY pulls the caption up — img9.png has a thin sliver of white
+      // margin below the mosaic itself (content runs to ~95% of the photo's
+      // own height).
+      { id: "beheaded-sun", x: 595, y: 2615, w: 548, h: 421, capDY: -20 },
+    ];
+    const RED_FILTER_BY_ID = Object.fromEntries(RED_FILTER_LAYOUT.map((l) => [l.id, l]));
+    // The filtered result is a much shorter page than the full collage (just
+    // these 7 pieces + footer), so it gets its own canvas height and footer
+    // offsets — lifted directly from the same Figma frame — rather than the
+    // normal grid's LAST_CARD_BOTTOM-derived ones further down.
+    const RED_FILTER_CANVAS_H = 3693;
+    const RED_FILTER_FOOTER_LINKS_TOP = 3428;
+    // Same -48 relationship as the normal page's FOOTER_PARAGRAPH_TOP (see
+    // below), so the paragraph's last line lines up with the אודות / יצירת
+    // קשר row instead of sitting further above it.
+    const RED_FILTER_FOOTER_PARAGRAPH_TOP = RED_FILTER_FOOTER_LINKS_TOP - 48;
+    const RED_FILTER_FOOTER_WORDMARK_TOP = 3502;
+    const RED_FILTER_FLY_MS = 480;
+
+    // Same idea as RED_FILTER_* above, but for "אבן" (stone) — only 2 of its
+    // matches (silver-hoard-bead, athena-engraving are both carnelian/stone
+    // pieces) get a committed result view; the bead again just slides via
+    // Card + posOverride (same pixel-identical 790×953 box, same "x:3 lines
+    // up with אודות" logic as RED_FILTER_BEAD_POS — it's the same photo).
+    // athena-engraving gets its own cover-cropped RedFilterCard box, but a
+    // portrait one this time (this frame shows the gem's own black square
+    // frame edge-to-edge, unlike אדום's wider, landscape cover-crop of the
+    // same image) — initial estimate from the reference frame, refine
+    // against a live screenshot.
+    // y:434 — same first-row clearance as RED_FILTER's own first row (see
+    // sun-croton above), so the "מעגל המעגל הוא..." description paragraph
+    // (fixed at y:183, ~72 tall) has room to sit above both boxes instead
+    // of colliding with them.
+    const STONE_FILTER_BEAD_POS = { x: 3, y: 434 };
+    // fullBleed: true — unlike the RED_FILTER box (a landscape cover-crop
+    // that shows most of img8.png's own white mat, hence CONTENT_FRAC there
+    // being real signal), this portrait box crops so tight against the
+    // *landscape* source photo that the black gem frame fills it edge to
+    // edge with no mat left to exclude — CONTENT_FRAC's fractions (measured
+    // against the photo's own near-full-width Card rendering) don't apply
+    // to a crop this different, so the description overlay should just use
+    // the box's own full bounds as "real content" instead.
+    // x:780 — the same ~8px breathing gap the normal grid itself already
+    // has between air-iron-water and bicycle-wheel (a real-content-edge gap:
+    // air-iron-water's own rendered right edge at 843, bicycle-wheel's
+    // real content starting at offsetX + 0.195*iw ≈ 852 past its box's raw
+    // left of 772 — matching CONTENT_FRAC["img21.png"]). Bead's own real
+    // right edge here is 772 (its 790-wide box centers a narrower
+    // letterboxed 748.7-wide render — see RED_FILTER_LAYOUT's own "bead's
+    // own right edge (772)" comment), so 772 + 8 = 780.
+    const STONE_FILTER_LAYOUT = [{ id: "athena-engraving", x: 780, y: 434, w: 264, h: 335, fullBleed: true }];
+    const STONE_FILTER_BY_ID = Object.fromEntries(STONE_FILTER_LAYOUT.map((l) => [l.id, l]));
+    // Only 2 pieces + footer — a much shorter canvas than even RED_FILTER's,
+    // sized off the bead's own box (the taller of the two) plus the same
+    // footer clearance pattern used elsewhere.
+    const STONE_FILTER_CANVAS_H = 1812;
+    const STONE_FILTER_FOOTER_LINKS_TOP = 1527;
+    const STONE_FILTER_FOOTER_PARAGRAPH_TOP = STONE_FILTER_FOOTER_LINKS_TOP - 48;
+    const STONE_FILTER_FOOTER_WORDMARK_TOP = STONE_FILTER_FOOTER_LINKS_TOP + 75;
+
+    // Every card's x/y/w/h is the exact box from the Figma frame (2123:2749,
+    // "סינון מעגל") at its native 1728px canvas width, run through the same
+    // scalePx() the rest of the site uses.
+    //
+    // How the image sits inside its w×h box (confirmed against the real
+    // Figma component code, e.g. גלגל אופניים / השקה / קערת סדר): the photo
+    // renders at its OWN natural aspect ratio, anchored to the top of the
+    // box. Landscape photos fill the full box width; a photo tall enough
+    // that its full-width height would exceed the box (the portrait scans,
+    // and a few short-boxed landscapes) is instead shrunk to fit the box
+    // height and centered horizontally — which is exactly what Figma does
+    // (e.g. "launch" is a 1356×1988 portrait sitting as a 678×994 image
+    // centered in its 1294px-wide box, with white to either side, NOT a
+    // full-width landscape crop). `ar` overrides the default 1460/1122
+    // aspect for the three photos whose files aren't 1460×1122. The caption
+    // then sits a few px under the image's actual bottom edge, spanning the
+    // image's width (see Card + computeImage below). This is why an earlier
+    // object-cover-to-box-height pass looked wrong: it stretched/cropped
+    // every photo to its box aspect and pushed the caption too far down.
+    // Two cards (2123:2782/2783 in the Figma file) sat outside the design's
+    // own scrolling frame but at y-offsets that line up exactly with where
+    // they visually belong in the grid, so they're included here like any
+    // other card.
+    //
+    // Hover dims the piece and reveals `description` as an overlay over the
+    // artwork (see Card) — the SHORT (2-3 line) brief for each piece's hover
+    // state, ending in a literal "..." as a deliberate design touch. Only
+    // seder-plate and optical-parable have no brief yet. siren-mirror,
+    // launch and silver-hoard-bead also swap to a `hoverImage` detail shot
+    // on hover, matching their own Figma hover variant.
+    const CARDS = [
+      {
+        id: "sun-croton", x: -19, y: 4986, w: 514, h: 415, image: "public/images/collections/img30.webp",
+        title: "שמש בקרוטון", subtitle: "אלכסנדר קרדל, 1960",
+        description: "קלדר, מהנדס מכונות בהכשרתו, היה ממציא ה״מובייל״ ומחלוצי האמנות הקינטית...", descWidthFrac: 0.9, descOffsetX: 18,
+      },
+      {
+        id: "air-iron-water", x: 24, y: 506, w: 849, h: 490, ar: 1640 / 972, image: "public/images/collections/img29.webp",
+        title: "אוויר, ברזל ומים", subtitle: "רובר דלונה, 1937",
+        description: "אוויר ברזל ומים הוא ציור קיר ענקי שיצר רובּר דלונֶה ב-1937, לאולם הגדול של ארמון מסילות הברזל...", descWidthFrac: 0.46, descOffsetX: 18,
+      },
+      {
+        id: "sunset-arenys", x: -2, y: 6333, w: 706, h: 551, image: "public/images/collections/img6.webp",
+        title: "שקיעה באראניי", subtitle: "קאמי פיסרו, 1870",
+        description: "בשנת 1884 העתיק פיסארו את מגוריו לכפר הזעיר אראניי ושכר שם בית, לימים רכש בית זה בעזרתו של מונה...", descWidthFrac: 0.61, descOffsetX: 18,
+      },
+      { id: "seder-plate", x: 518, y: 1722, w: 416, h: 302, image: "public/images/collections/img28.webp", title: "קערת סדר מספרד", subtitle: "1480", description: "קערת פסח נדירה במיוחד העשויה קרמיקה (מיוליקה/חסין אש) עם עיטורים בזהב ובכחול...", descWidthFrac: 0.88, descOffsetX: 18 },
+      {
+        id: "stalactite", x: 1108, y: 2304, w: 774, h: 640, image: "public/images/collections/img1.webp",
+        title: "נטיפה", subtitle: "התקופה האפיפלאוליתית",
+        description: "נטיפה (תליון) מן התקופה האפי-פלאוליתית — התקופה שבין סוף הפלאוליתי לראשית הניאוליתי...", descWidthFrac: 0.73,
+      },
+      {
+        id: "spindle-whorl", x: 78, y: 3198, w: 569, h: 482, image: "public/images/collections/img27.webp",
+        title: "משקולת פלך", subtitle: "המאה ה-10 עד ה-6 לפנה״ס",
+        description: "דיסקה עגולה ושטוחה עם חור במרכזה, מלוטשת ובעלת פטינה כהה...", descWidthFrac: 0.7, descOffsetX: 18,
+      },
+      {
+        id: "siren-mirror", x: 305, y: 3221, w: 1247, h: 982, image: "public/images/collections/img26.webp",
+        title: "מראה בעלת ידית סירנה", subtitle: "425-450 לפנה״ס",
+        description: "מראת ברונזה שבבסיסה דמות מכונפת — סירנה — שכנפיה הפרושות אוחזות  במראה...",
+      },
+      {
+        id: "titus-denarius", x: 800, y: 2705, w: 491, h: 377, image: "public/images/collections/img25.webp",
+        title: "מטבע דנריוס של טיטוס", subtitle: "המאה ה-80-81 לספירה",
+        description: "מטבע כסף רומי — דֵּנָריוּס, מטבע הכסף הסטנדרטי של האימפריה...", descWidthFrac: 0.8,
+      },
+      {
+        id: "launch", x: 289, y: 4209, w: 1294, h: 1015, ar: 1356 / 1988, image: "public/images/collections/img23.webp", hoverImage: "public/images/collections/img24.webp",
+        title: "השקה", subtitle: "אדולף גוטליב, 1960",
+        description: "היצירה ״השקה״ שייכת ככל הנראה לסדרת ההתפרצות (Burst), שגוטליב יצר החל מ-1956...",
+      },
+      {
+        id: "pomegranate-bottle", x: 810, y: 1813, w: 550, h: 445, image: "public/images/collections/img22.webp",
+        title: "בקבוק דמוי רימון", subtitle: "המאה ה-14 עד ה-13 לפנה״ס",
+        description: "בקבוק דמוי רימון מן המאה ה-13 עד ה-14 לפנה״ס...", descWidthFrac: 0.9, descOffsetX: 18,
+      },
+      {
+        id: "bicycle-wheel", x: 772, y: 507, w: 408, h: 356, image: "public/images/collections/img21.webp",
+        title: "גלגל אופניים", subtitle: "מרסל דושאן, 1913",
+        description: "״גלגל אופניים״ של מרסל דושאן הוא חפץ תעשייתי מן המוכן...", descWidthFrac: 0.88, descOffsetX: 18,
+      },
+      {
+        id: "paris-graffiti", x: 124, y: 1000, w: 904, h: 718, image: "public/images/collections/img20.webp",
+        title: "גרפיטי פריזאי", subtitle: "ברסאי (יולה הולאס), 1957",
+        description: "בעשורים הראשונים של המאה ה-20, הרבו צלמים לצלם גרפיטי, לא רק בחיפוש אחרי צורה אמנותית...", descWidthFrac: 0.85, descOffsetX: 18,
+      },
+      {
+        id: "suppression", x: 18, y: 4529, w: 583, h: 454, image: "public/images/collections/img19.webp",
+        title: "דיכוי החפץ", subtitle: "ויקטור בראונר, 1951",
+        description: "דיכוי החפץ היא יצירה העוסקת במתח שבין אובייקט, גוף ותודעה...", descWidthFrac: 0.42, descOffsetX: 18,
+      },
+      {
+        id: "torah-crown", x: 1380, y: 1061, w: 319, h: 269, image: "public/images/collections/img14.webp",
+        title: "כתר תורה", subtitle: "1697",
+        description: "כתר התורה הוא דוגמה אופיינית לצורפות ההולנדית במאה ה-17...", descWidthFrac: 0.92, descOffsetX: 18,
+      },
+      {
+        id: "annunciation", x: 846, y: 1038, w: 556, h: 394, coverTop: true, capInsetL: 6, capInsetR: 6, image: "public/images/collections/img18.webp",
+        title: "הבשורה למרים (קטע)", subtitle: "המאה ה-16 עד ה-18",
+        description: "היצירה מתארת את ״הבשורה למרים״ — הרגע שבו המלאך גבריאל מבשר למרים שתהרה ותלד את ישו...", descWidthFrac: 0.71, descOffsetY: 24,
+      },
+      {
+        id: "silver-hoard-bead", x: 55, y: 2231, w: 790, h: 953, ar: 1492 / 1856, image: "public/images/collections/img16.webp", hoverImage: "public/images/collections/img17.webp",
+        title: "חרוז מתוך מטמון כסף", subtitle: "המאה ה-7 לפנה״ס",
+        description: "אבן קרניאול היא אבן חן בגווני אדום־כתום עד חום עמוק, השייכת למשפחת הכלקדון...",
+      },
+      {
+        id: "silver-hoard-ring", x: 1044, y: 507, w: 599, h: 481, image: "public/images/collections/img15.webp",
+        title: "טבעת מתוך מטמון כסף", subtitle: "המאה ה-7 לפנה״ס",
+        description: "טבעת כסף מן המאה ה-7 לפנה״ס, עשויה חוט מתכת יחיד שעוקף את האצבע ביותר מהיקף שלם...", descWidthFrac: 0.83,
+      },
+      { id: "optical-parable", x: 1129, y: 3913, w: 725, h: 580, image: "public/images/collections/img13.webp", title: "משל אופטי", subtitle: "מנואל אלוורס-בראבו, 1931", description: "משל אופטי היא יצירה מפורסמת של הצלם המקסיקני מנואל אלווראס בראבו משנת 1931, המציגה חלון ראווה של חנות אופטיקה עם אלמנטים של עיניים...", descWidthFrac: 0.85, descOffsetX: 18 },
+      {
+        id: "negev", x: 25, y: 1796, w: 568, h: 440, image: "public/images/collections/img12.webp",
+        title: "נגב", subtitle: "מגדלנה אבאקונוביץ׳, 1987", capDY: -17,
+        description: "ביומה הראשון של אבאקנוביץ״ בירושלים, באפריל 1987, היא התרשמה עמוקות ממראה אבן הגיר המקומית...", descWidthFrac: 0.68, descOffsetX: 12, descOffsetY: 12,
+      },
+      {
+        id: "quipu", x: 1226, y: 1496, w: 546, h: 425, image: "public/images/collections/img11.webp",
+        title: "׳קיפו׳", subtitle: "1400-1532",
+        description: "מערך זה של חבלים קשורים היה יקר־ערך בשל המידע שהוצפן בו...", descWidthFrac: 0.75, descOffsetX: 18,
+      },
+      {
+        id: "red-sun", x: 377, y: 5226, w: 404, h: 332, image: "public/images/collections/img10.webp",
+        title: "שמש אדומה", subtitle: "מרדכי ארדון, 1972",
+        description: "״שמש אדומה״ של מרדכי ארדון בנויה על חלוקה אופקית פשוטה...", descWidthFrac: 0.62, descOffsetX: 18,
+      },
+      {
+        id: "beheaded-sun", x: 665, y: 6179, w: 467, h: 343, image: "public/images/collections/img9.webp",
+        title: "שמש ערופה", subtitle: "פייר אלשינסקי, 1970", capDY: -10,
+        description: "״שמש ערופה״ הוא הדפס המשלב תחריט במרכז ומסגרת...", descWidthFrac: 0.56, descOffsetX: 18, descOffsetY: 12,
+      },
+      {
+        id: "even-more", x: 1077, y: 6195, w: 337, h: 280, image: "public/images/collections/img3.webp",
+        title: "אף יותר", subtitle: "וסילי קנדינסקי, 1933",
+        description: "וסילי קנדינסקי (1866–1944), יליד רוסיה, היה מן הציירים המשפיעים ומחלוצי האמנות המופשטת...", descWidthFrac: 0.78, descOffsetX: 18,
+      },
+      {
+        id: "athena-engraving", x: -57, y: 5404, w: 422, h: 345, image: "public/images/collections/img8.webp",
+        title: "תגליף אתנה", subtitle: "המאה ה-1 לספירה",
+        description: "תגליף (אינטָליוֹ) חרוט באבן קרניאול בצורה אובלית...", descWidthFrac: 0.9, descOffsetX: 18,
+      },
+      {
+        id: "jericho-first", x: 566, y: 5574, w: 1127, h: 850, image: "public/images/collections/img7.webp",
+        title: "יריחו תחילה", subtitle: "שריף ואכד, 2002", capDY: -253,
+        description: "״יריחו תחילה״ (2002) של האמן הפלסטיני שריף ואחד מבוססת על פסיפס מן המאה ה-8...", descWidthFrac: 0.36, descOffsetX: 18,
+      },
+      {
+        id: "engraved-plate", x: 1149, y: 3164, w: 684, h: 559, image: "public/images/collections/img5.webp",
+        title: "צלחת ועליה מגולפים סמלים", subtitle: "המאה ה-4 לספירה",
+        description: "צלחת זו מבית שערים היא יחידה במינה מבחינת גודלה ועיטוריה. אף שדגמי העיטור היטשטשו וקשה להבינם...", descWidthFrac: 0.8, descOffsetX: 18,
+      },
+      {
+        id: "pastilli-chair", x: 691, y: 5273, w: 740, h: 561, image: "public/images/collections/img4.webp",
+        title: "כיסא ״פסטיל״", subtitle: "אירו ארניו, 1967", capDY: -10,
+        description: "בראשית שנות ה־60 ובמסגרת התרחקותו ממוסכמות העיצוב המסורתיות ערך אירו ארניו...", descWidthFrac: 0.6, descOffsetX: 18,
+      },
+    ];
+
+    // Caption sits a few px below the image's actual bottom (matching the
+    // ~1% inset Figma uses between each image and its caption line), with a
+    // single 16px line under it.
+    const CARD_CAPTION_GAP = 2;
+    const CARD_CAPTION_LINE_H = 20; // approx rendered height of the 16px caption line
+    const DEFAULT_AR = 1460 / 1122;
+
+    // Visible-artwork horizontal extent as a fraction of each image file's
+    // width. Most collection PNGs are studio photos with pure-white side
+    // padding baked in (invisible against the cream page); the caption in
+    // the target hugs the *visible artwork*, not the padded box — so the
+    // date/title land at the artwork's real left/right edges instead of out
+    // in the white padding (which is what used to shove the wheel's date
+    // under the neighboring painting). Measured per file with PIL. Images
+    // not listed are full-bleed → default [0, 1].
+    const CONTENT_FRAC = {
+      "img1.png": [0.249, 0.748], "img3.png": [0.115, 0.885], "img5.png": [0.197, 0.803],
+      "img8.png": [0.200, 0.797], "img10.png": [0.195, 0.805], "img11.png": [0.126, 0.874],
+      "img13.png": [0.208, 0.789], "img14.png": [0.071, 0.929], "img15.png": [0.104, 0.893],
+      "img20.png": [0.200, 0.797], "img21.png": [0.195, 0.805], "img22.png": [0.115, 0.882],
+      "img24.png": [0.241, 0.759], "img25.png": [0.052, 0.948], "img26.png": [0.227, 0.773],
+      "img27.png": [0.123, 0.874], "img28.png": [0.121, 0.879], "img30.png": [0.090, 0.910],
+      "img6.png": [0.023, 0.975],
+    };
+
+    // Same idea as CONTENT_FRAC but for vertical padding (top/bottom
+    // fractions) — most files only pad left/right, but a couple (a coin
+    // shot, and jericho-first's excavation photo) have the real content
+    // sitting in a narrow horizontal band with lots of white above/below.
+    // Without this, those cards' hover hitbox (see Card) spanned the full
+    // padded box and bled into whatever overlapping neighbor sat in that
+    // empty space. Images not listed default to [0, 1] (no vertical trim).
+    const CONTENT_FRAC_Y = {
+      "img7.png": [0.307, 0.693],
+      "img25.png": [0.205, 0.790],
+    };
+
+    // Resolve where the photo actually renders inside a card's w×h box:
+    // full box width at the photo's own aspect, unless that height would
+    // overflow the box (portrait scans + a few short-boxed cards), in which
+    // case shrink to the box height and centre horizontally. Returns the
+    // image rect (offsetX/width/height) plus the caption's top offset.
+    function computeImage(card) {
+      // coverTop: fill the whole w×h box and crop the OVERFLOW off the bottom
+      // (objectPosition top in the Card img), i.e. crop the artwork from below.
+      // Used where the design deliberately clips an image's lower edge.
+      if (card.coverTop) {
+        const captionTop = card.h + CARD_CAPTION_GAP;
+        return { iw: card.w, ih: card.h, offsetX: 0, captionTop, renderedH: Math.max(card.h, captionTop + CARD_CAPTION_LINE_H) };
+      }
+      const ar = card.ar || DEFAULT_AR;
+      let iw = card.w;
+      let ih = iw / ar;
+      const maxH = card.h - (CARD_CAPTION_GAP + CARD_CAPTION_LINE_H);
+      if (ih > maxH) {
+        ih = maxH;
+        iw = ih * ar;
+      }
+      const offsetX = (card.w - iw) / 2;
+      const captionTop = ih + CARD_CAPTION_GAP;
+      const renderedH = Math.max(card.h, captionTop + CARD_CAPTION_LINE_H);
+      return { iw, ih, offsetX, captionTop, renderedH };
+    }
+
+    // Figma's raw x/y is used as-is. An earlier pass nudged negev down 340px
+    // to dodge what looked like a clash with seder-plate's left edge — but
+    // the reference recording shows negev at its raw position, and the
+    // "clash" was only negev's full-bleed photo overlapping seder-plate's
+    // WHITE CANVAS PADDING (nearly every collection PNG is artwork centered
+    // on a 1460×1122 white canvas, so image boxes overlap harmlessly all
+    // over this grid; DOM order decides who wins and negev renders later).
+    // The nudge itself caused a real clash by pushing negev into the
+    // carnelian-bead card below, so it's gone. Kept as a mechanism in case
+    // a genuine clash ever needs a targeted fix.
+    const Y_NUDGE = {};
+
+    function layoutCards(cards) {
+      return cards.map((card) => ({
+        ...card,
+        y: card.y + (Y_NUDGE[card.id] || 0),
+        renderedH: computeImage(card).renderedH,
+      }));
+    }
+    const LAID_OUT_CARDS = layoutCards(CARDS);
+    const LAST_CARD_BOTTOM = Math.max(...LAID_OUT_CARDS.map((c) => c.y + c.renderedH));
+    const CARDS_BY_ID = Object.fromEntries(CARDS.map((c) => [c.id, c]));
+
+    // Footer position is now relative to wherever the laid-out cards
+    // actually end, rather than Figma's fixed 7368px canvas — since cards
+    // can shift down from their original y (see layoutCards above), the
+    // footer needs to follow. The three offsets between FOOTER_LINKS_TOP,
+    // the about-paragraph, and the wordmark reproduce the exact spacing
+    // Figma's original fixed numbers had between each other (7103/7055/7178).
+    const FOOTER_LINKS_TOP = LAST_CARD_BOTTOM + 140;
+    const FOOTER_PARAGRAPH_TOP = FOOTER_LINKS_TOP - 48;
+    const FOOTER_WORDMARK_TOP = FOOTER_LINKS_TOP + 75;
+    const CANVAS_H = FOOTER_WORDMARK_TOP + 170 + 40;
+
+    function NavLink({ label, href, onClick }) {
+      const [visible, setVisible] = useState(false);
+      const [origin, setOrigin] = useState("right");
+      const [resetKey, setResetKey] = useState(0);
+      const rafIds = useRef([]);
+
+      function clearRafs() {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+      }
+      function handleEnter() {
+        // Clicking a focusable link fires onFocus even though the mouse
+        // never left — without this guard that replays the whole closed-
+        // then-sweep-in animation as a visible glitch right at the click.
+        if (visible) return;
+        clearRafs();
+        setOrigin("right");
+        setVisible(false);
+        setResetKey((k) => k + 1);
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+        }));
+      }
+      function handleLeave() {
+        clearRafs();
+        setOrigin("left");
+        setVisible(false);
+      }
+      const clipPath = visible ? "inset(0 0 0 0)" : origin === "right" ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)";
+
+      return (
+        <a
+          href={href}
+          onClick={onClick}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          onFocus={handleEnter}
+          onBlur={handleLeave}
+          className="relative inline-block text-[#28282a]"
+          style={{ textDecoration: "none" }}
+        >
+          {label}
+          <span
+            key={resetKey}
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              color: "transparent",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+              clipPath,
+              transition: "clip-path 0.16s ease",
+            }}
+          >
+            {label}
+          </span>
+        </a>
+      );
+    }
+
+    // Same underline-sweep-on-hover as NavLink, but for words that toggle
+    // state (filter chips, "ניקוי") rather than navigate — a <span onClick>
+    // instead of an <a href>. Passing `active` makes it a *controlled*
+    // sweep instead: the sweep is driven by that external boolean (e.g. a
+    // Card's own hover state) rather than this span's own mouse events —
+    // used so hovering an artwork's image also sweeps its caption's
+    // underline, as one combined "hovering this piece" interaction, rather
+    // than requiring the user to separately hover the small caption text.
+    function HoverWord({ label, onClick, active, onHoverChange }) {
+      const [visible, setVisible] = useState(false);
+      const [origin, setOrigin] = useState("right");
+      const [resetKey, setResetKey] = useState(0);
+      const rafIds = useRef([]);
+      const isControlled = active !== undefined;
+
+      function clearRafs() {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+      }
+      function open() {
+        clearRafs();
+        setOrigin("right");
+        setVisible(false);
+        setResetKey((k) => k + 1);
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+        }));
+        onHoverChange && onHoverChange(true);
+      }
+      function close() {
+        clearRafs();
+        setOrigin("left");
+        setVisible(false);
+        onHoverChange && onHoverChange(false);
+      }
+
+      useEffect(() => {
+        if (!isControlled) return;
+        if (active) open(); else close();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [isControlled, active]);
+
+      const clipPath = visible ? "inset(0 0 0 0)" : origin === "right" ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)";
+
+      return (
+        <span
+          onMouseEnter={isControlled ? undefined : open}
+          onMouseLeave={isControlled ? undefined : close}
+          onFocus={isControlled ? undefined : open}
+          onBlur={isControlled ? undefined : close}
+          onClick={onClick}
+          tabIndex={isControlled ? undefined : 0}
+          className={"relative inline-block text-[#28282a]" + (isControlled ? "" : " cursor-pointer")}
+        >
+          {label}
+          <span
+            key={resetKey}
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              color: "transparent",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+              clipPath,
+              transition: "clip-path 0.16s ease",
+            }}
+          >
+            {label}
+          </span>
+        </span>
+      );
+    }
+
+    function TopNav({ onSearchToggle }) {
+      return (
+        <nav
+          id="cc-nav"
+          className="flex items-center gap-5 pointer-events-auto"
+          dir="rtl"
+          style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(20), letterSpacing: "0.2px" }}
+        >
+          {/* Always underlined (this page lives inside אסופות, unlike
+              אינדקס/חיפוש/אודות which are plain sibling links) — but still a
+              real link to the home page's About section, same target
+              אודות itself points to, not just a static label. Sets the same
+              skipIntro/scrollToAbout handoff as the wordmark's own link
+              (see HeaderWordmarkLink) so index.html lands directly on the
+              About section instead of the hero. */}
+          <a
+            href="index.html#about"
+            onClick={() => {
+              sessionStorage.setItem("skipIntro", "1");
+              sessionStorage.setItem("scrollToAbout", "1");
+            }}
+            className="inline-block text-[#28282a]"
+            style={{
+              textDecoration: "none",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+            }}
+          >
+            אסופות
+          </a>
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.label}
+              label={item.label}
+              href={item.href}
+              // "חיפוש" doesn't navigate — it toggles the search bar (see
+              // SearchBar/App). stopPropagation keeps this same click from
+              // also being seen by SearchBar's document-level away-listener,
+              // which would otherwise immediately close what this just opened.
+              onClick={item.label === "חיפוש" ? (e) => { e.preventDefault(); e.stopPropagation(); onSearchToggle(); } : undefined}
+            />
+          ))}
+        </nav>
+      );
+    }
+
+    const SEARCH_FADE_MS = 180;
+    const SEARCH_PLACEHOLDER = "חפש.י לפי אסופה, יצירה או יוצר.ת...";
+    const SEARCH_MAX_RESULTS = 8;
+    const CARET_BLINK_MS = 530;
+
+    // Matching lives in search-engine.js so this dropdown and the full results
+    // page (search.html) can never disagree about what a query means. It
+    // returns the complete list; the dropdown shows the first
+    // SEARCH_MAX_RESULTS and links the rest through to search.html.
+    function searchArtworks(query) {
+      return window.MuseumSearch.run(query).results;
+    }
+
+    function SearchBar({ open, onClose }) {
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const [query, setQuery] = useState("");
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+      const wrapperRef = useRef(null);
+      const inputRef = useRef(null);
+      const allResults = searchArtworks(query);
+      const results = allResults.slice(0, SEARCH_MAX_RESULTS);
+
+      function goToResult(art) {
+        window.location.href = "artwork.html?id=" + art.id;
+      }
+
+      // Fake caret matching the stroke's own weight (scalePx(4)) — the real
+      // <input> keeps native focus/selection/typing, but its own caret is
+      // hidden (caret-color: transparent) since browsers don't expose a way
+      // to make that thin native bar match our 4px line. This bar is
+      // repositioned by measuring the pre-cursor substring on a scratch
+      // canvas (matching the input's own live computed font), same
+      // measure-in-browser technique used throughout this file for text
+      // fitting — cheap enough to run on every keystroke.
+      const [caretOffset, setCaretOffset] = useState(0);
+      const [caretOn, setCaretOn] = useState(true);
+      const [caretFocused, setCaretFocused] = useState(false);
+      const measureCtxRef = useRef(null);
+      const blinkTimerRef = useRef(null);
+
+      function measureCaret() {
+        const el = inputRef.current;
+        if (!el) return;
+        if (!measureCtxRef.current) measureCtxRef.current = document.createElement("canvas").getContext("2d");
+        const cs = getComputedStyle(el);
+        measureCtxRef.current.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+        setCaretOffset(measureCtxRef.current.measureText(el.value.slice(0, pos)).width);
+      }
+
+      function restartBlink() {
+        setCaretOn(true);
+        clearInterval(blinkTimerRef.current);
+        blinkTimerRef.current = setInterval(() => setCaretOn((v) => !v), CARET_BLINK_MS);
+      }
+
+      useEffect(() => {
+        if (!caretFocused) { clearInterval(blinkTimerRef.current); return; }
+        restartBlink();
+        return () => clearInterval(blinkTimerRef.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [caretFocused]);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (open) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          setQuery("");
+          if (inputRef.current) inputRef.current.value = "";
+          closeTimer.current = setTimeout(() => setMounted(false), SEARCH_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [open]);
+
+      useEffect(() => {
+        if (open && visible && inputRef.current) inputRef.current.focus();
+      }, [open, visible]);
+
+      // Click-away and Escape both close it. This listens on "click" (not
+      // "mousedown") specifically so the toggle's own stopPropagation — fired
+      // during the same click event — can suppress it; a mousedown listener
+      // would fire on a different, earlier event and miss that suppression.
+      useEffect(() => {
+        if (!open) return;
+        function onDocClick(e) {
+          if (wrapperRef.current && !wrapperRef.current.contains(e.target)) onClose();
+        }
+        function onKeyDown(e) {
+          if (e.key === "Escape") onClose();
+          if (e.key === "Enter") {
+            // Enter goes to the full results list rather than jumping straight
+            // into the top hit — a query like "אדום" has 27 matches and the
+            // dropdown only ever shows 8 of them.
+            window.location.href = window.MuseumSearch.urlFor(inputRef.current ? inputRef.current.value : "");
+          }
+        }
+        document.addEventListener("click", onDocClick);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+          document.removeEventListener("click", onDocClick);
+          document.removeEventListener("keydown", onKeyDown);
+        };
+      }, [open, onClose]);
+
+      if (!mounted) return null;
+
+      return (
+        <div
+          ref={wrapperRef}
+          className="absolute pointer-events-auto"
+          style={{
+            left: 0,
+            right: 0,
+            top: scalePx(0),
+            height: scalePx(70),
+            zIndex: 50,
+            backgroundColor: "#fffdfa",
+            opacity: visible ? 1 : 0,
+            transition: `opacity ${SEARCH_FADE_MS}ms ease`,
+          }}
+        >
+          <div
+            className="absolute"
+            style={{ left: 0, right: 0, top: scalePx(66), borderBottom: `${scalePx(4)} solid #28282a` }}
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            dir="rtl"
+            placeholder={SEARCH_PLACEHOLDER}
+            className="absolute bg-transparent outline-none text-right placeholder:text-[#28282a]"
+            style={{
+              right: scalePx(15),
+              left: scalePx(15),
+              top: scalePx(10),
+              height: scalePx(56),
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              fontSize: scalePx(58),
+              lineHeight: 1.21,
+              color: "#28282a",
+              caretColor: "transparent",
+            }}
+            onFocus={() => { setCaretFocused(true); setQuery(inputRef.current.value); measureCaret(); restartBlink(); }}
+            onBlur={() => setCaretFocused(false)}
+            onInput={(e) => { setQuery(e.target.value); measureCaret(); restartBlink(); }}
+            onKeyUp={() => { measureCaret(); restartBlink(); }}
+            onClick={() => { measureCaret(); restartBlink(); }}
+          />
+          {caretFocused && query && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                right: `calc(${scalePx(15)} + ${caretOffset}px)`,
+                top: scalePx(8),
+                height: scalePx(48),
+                width: scalePx(4),
+                backgroundColor: "#28282a",
+                opacity: caretOn ? 1 : 0,
+              }}
+            />
+          )}
+          {query.trim() && (
+            <div
+              className="absolute"
+              style={{
+                left: 0,
+                right: 0,
+                top: scalePx(70),
+                backgroundColor: "#fffdfa",
+              }}
+            >
+              {results.length === 0 ? (
+                <div
+                  dir="rtl"
+                  className="text-right"
+                  style={{
+                    padding: `${scalePx(18)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  אין תוצאות
+                </div>
+              ) : (
+                results.map((art, i) => (
+                  <div
+                    key={art.id}
+                    dir="rtl"
+                    onClick={() => goToResult(art)}
+                    className="flex items-baseline justify-between cursor-pointer"
+                    style={{
+                      padding: `${scalePx(14)} ${scalePx(15)}`,
+                      borderBottom: (i < results.length - 1 || allResults.length > results.length) ? "1px solid rgba(40, 40, 42, 0.2)" : "none",
+                      fontFamily: FONT_THEBASICS,
+                    }}
+                  >
+                    <span style={{ fontWeight: 500, fontSize: scalePx(22) }}>
+                      {art.title}
+                      {art.artist && (
+                        <span style={{ fontWeight: 400, color: "rgba(40, 40, 42, 0.6)" }}> {art.artist}</span>
+                      )}
+                    </span>
+                    <span style={{ fontSize: scalePx(16), color: "rgba(40, 40, 42, 0.5)", flexShrink: 0, marginInlineStart: scalePx(12) }}>
+                      {art.motif}
+                    </span>
+                  </div>
+                ))
+              )}
+              {allResults.length > results.length && (
+                <div
+                  dir="rtl"
+                  onClick={() => { window.location.href = window.MuseumSearch.urlFor(query); }}
+                  className="text-right cursor-pointer"
+                  style={{
+                    padding: `${scalePx(14)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  {`כל התוצאות (${allResults.length})`}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function MotifTagRow() {
+      return (
+        <div
+          id="cc-motif-row"
+          className="flex items-baseline gap-3"
+          dir="rtl"
+          style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(40), letterSpacing: "-0.8px" }}
+        >
+          {MOTIF_TAGS.map((tag, i) => {
+            const text = i < MOTIF_TAGS.length - 1 ? tag.label + "," : tag.label;
+            return tag.current ? (
+              <span
+                key={tag.label}
+                style={{
+                  textDecorationLine: "underline",
+                  textDecorationColor: "#28282a",
+                  textDecorationThickness: UNDERLINE_THICKNESS,
+                  textUnderlineOffset: UNDERLINE_OFFSET,
+                  textDecorationSkipInk: "auto",
+                }}
+              >
+                {text}
+              </span>
+            ) : (
+              <NavLink key={tag.label} label={text} href={tag.href} />
+            );
+          })}
+        </div>
+      );
+    }
+
+    // The color/material filter. In the reference flow it rests as just the
+    // small ring icon pinned near the top-right (below the small wordmark);
+    // clicking the icon opens the "סינון מעגל" state from the Figma frame —
+    // the floating word list (40px, no panel/background, right-aligned) with
+    // the icon inline at the start of the first line and ניקוי (reset)
+    // below. The design's own mega-menu export positioned every word via
+    // huge (800%+) inset percentages off the tiny 43x42 icon — a Figma-
+    // authoring artifact, not real geometry — so this reproduces the
+    // visible result cleanly instead.
+    const FILTER_FADE_MS = 120;
+
+    // Filter words that commit to a fixed result layout on click (see
+    // RED_FILTER_LAYOUT / STONE_FILTER_LAYOUT) rather than just previewing
+    // on hover — every other FILTER_MATCHES entry (if any) still gets the
+    // hover-magnet preview for free, it just has nothing to click into yet.
+    const COMMITTABLE_FILTERS = ["אדום", "אבן"];
+
+    function FilterMenu({ highlightedFilters, onFilterHover, onSelectFilter, onClear }) {
+      // "open" reflects intent (icon click), "mounted" keeps the list in the
+      // DOM through the fade-*out* too — it only unmounts after the opacity
+      // transition finishes, instead of vanishing instantly. Starts already
+      // open/mounted/visible — the filter list defaults to its open state
+      // on load rather than starting collapsed behind the icon.
+      const [open, setOpen] = useState(true);
+      const [mounted, setMounted] = useState(true);
+      const [visible, setVisible] = useState(true);
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (open) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          closeTimer.current = setTimeout(() => setMounted(false), FILTER_FADE_MS);
+          // Closing the menu mid-hover would otherwise leave the cards
+          // stuck in the preview cluster, since the word (and its
+          // onMouseLeave) is about to be removed from the DOM out from
+          // under the cursor.
+          onFilterHover && onFilterHover(null);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [open]);
+
+      if (!mounted) {
+        return (
+          <img
+            src="public/images/icon-filter-circle.svg"
+            alt="סינון"
+            role="button"
+            aria-expanded={open}
+            className="cursor-pointer pointer-events-auto"
+            onClick={() => setOpen(true)}
+            style={{ width: scalePx(43), height: scalePx(42) }}
+          />
+        );
+      }
+      return (
+        <div id="cc-filter-menu" className="pointer-events-auto" style={{ position: "relative", width: scalePx(600) }}>
+          {/* The icon sits outside the fading block and never itself
+              fades — only the word list should animate in/out. It's
+              absolutely positioned (top:0, matching the closed icon's own
+              box) rather than inline-aligned within row 1's text, since
+              inline vertical-align is relative to the *whole line box*
+              (built from the 40px text + line-height), which sat the icon
+              noticeably lower than its closed-state position. Physical
+              "right" here, not insetInlineEnd — in this dir="rtl" context
+              inline-end resolves to the physical *left*, which put the icon
+              on the wrong side entirely. */}
+          <img
+            src="public/images/icon-filter-circle.svg"
+            alt="סינון"
+            role="button"
+            aria-expanded={open}
+            className="cursor-pointer"
+            onClick={() => setOpen(false)}
+            style={{ position: "absolute", top: 0, right: 0, width: scalePx(43), height: scalePx(42) }}
+          />
+          <div
+            className="text-right"
+            dir="rtl"
+            style={{
+              fontFamily: FONT_THEBASICS,
+              fontSize: scalePx(40),
+              lineHeight: 1.15,
+              opacity: visible ? 1 : 0,
+              transition: `opacity ${FILTER_FADE_MS}ms ease`,
+            }}
+          >
+            {/* Plain RTL inline text flow, not flexbox: bidi text layout
+                (first logical child lands at the right, flowing left) is
+                universally consistent across browsers, whereas relying on
+                flex-direction's interaction with an *inherited* dir/direction
+                turned out not to render the same way in every browser. */}
+            {FILTER_ROWS.map((row, ri) => (
+              <div key={ri} style={ri === 0 ? { paddingRight: scalePx(59) } : undefined}>
+                {row.map((opt, i) => (
+                  <React.Fragment key={opt}>
+                    {/* A committed filter word, once selected, reads as the
+                        page's current filter the same way "אסופות"/"מעגל"
+                        read as the current nav/motif elsewhere — a plain
+                        permanent underline, not the interactive hover-sweep
+                        every other word still gets. */}
+                    {highlightedFilters.includes(opt) ? (
+                      <span
+                        style={{
+                          textDecorationLine: "underline",
+                          textDecorationColor: "#28282a",
+                          textDecorationThickness: UNDERLINE_THICKNESS,
+                          textUnderlineOffset: UNDERLINE_OFFSET,
+                          textDecorationSkipInk: "auto",
+                        }}
+                      >
+                        {opt}
+                      </span>
+                    ) : (
+                      <HoverWord
+                        label={opt}
+                        onClick={COMMITTABLE_FILTERS.includes(opt) ? () => onSelectFilter(opt) : undefined}
+                        onHoverChange={
+                          FILTER_MATCHES[opt] && onFilterHover ? (h) => onFilterHover(h ? opt : null) : undefined
+                        }
+                      />
+                    )}
+                    {i < row.length - 1 && (
+                      <span style={{ marginInline: scalePx(10) }}>/</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            ))}
+            <div style={{ marginTop: scalePx(70) }}>
+              <HoverWord
+                label="ניקוי"
+                onClick={() => {
+                  onFilterHover && onFilterHover(null);
+                  onClear && onClear();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Hover (dim siblings, underline caption, swap image, reveal a longer
+    // blurb on 3 cards) is disabled for now, per direct instruction — this
+    // renders every card in its plain resting state only. Re-wiring that
+    // interaction later just means bringing hoveredId/setHoveredId back as
+    // props here, the way the previous version had them.
+    // Coordinates the tile reveal across every Card: one shared
+    // IntersectionObserver watches all card wrappers, and whichever ones
+    // cross into view together in the same browser callback batch get
+    // staggered TILE_STAGGER_MS apart, right-to-left (highest x — physical
+    // "left" position, which is never flipped by dir=rtl — goes first) —
+    // rather than each card fading in independently whenever its own image
+    // happens to finish loading. tileRevealClock is a running "last
+    // scheduled slot" timestamp so a later, separate scroll event starts
+    // its own fresh cadence instead of queuing behind a stale one.
+    //
+    // TILE_TRIGGER_FRAC (0.2, matching the observer's -20% rootMargin below)
+    // is also used by a plain scroll-event backstop: a big single-frame
+    // scroll jump (End key, fast fling, or a script-triggered scrollTo) can
+    // move an element from below the trigger line to above the viewport
+    // entirely between two observer samples, skipping the "isIntersecting"
+    // state altogether — IntersectionObserver simply never calls back for a
+    // target that never crossed its threshold. The rAF-throttled scroll
+    // listener directly measures every still-pending tile's own
+    // getBoundingClientRect() on real scroll, so nothing can get stuck
+    // invisible forever even if the observer alone missed it.
+    const TILE_STAGGER_MS = 50;
+    const TILE_TRIGGER_FRAC = 0.2;
+    let tileRevealObserver = null;
+    let tileRevealClock = 0;
+    const tileRevealCallbacks = new Map();
+    let scrollListenerAttached = false;
+    let scrollCheckQueued = false;
+
+    function revealTiles(els) {
+      els.sort((a, b) => Number(b.dataset.tileX) - Number(a.dataset.tileX));
+      els.forEach((el) => {
+        tileRevealObserver.unobserve(el);
+        const cb = tileRevealCallbacks.get(el);
+        if (!cb) return;
+        tileRevealCallbacks.delete(el);
+        const now = Date.now();
+        const at = Math.max(now, tileRevealClock + TILE_STAGGER_MS);
+        tileRevealClock = at;
+        setTimeout(cb, at - now);
+      });
+    }
+
+    function checkPendingTiles() {
+      scrollCheckQueued = false;
+      const triggerLine = window.innerHeight * (1 - TILE_TRIGGER_FRAC);
+      const ready = [];
+      tileRevealCallbacks.forEach((_, el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < triggerLine || rect.bottom < 0) ready.push(el);
+      });
+      if (ready.length) revealTiles(ready);
+    }
+
+    function ensureTileScrollBackstop() {
+      if (scrollListenerAttached) return;
+      scrollListenerAttached = true;
+      window.addEventListener(
+        "scroll",
+        () => {
+          if (scrollCheckQueued) return;
+          scrollCheckQueued = true;
+          requestAnimationFrame(checkPendingTiles);
+        },
+        { passive: true }
+      );
+    }
+
+    function scheduleTileReveal(el, onReveal) {
+      ensureTileScrollBackstop();
+      if (!tileRevealObserver) {
+        tileRevealObserver = new IntersectionObserver(
+          (entries) => {
+            const entering = entries.filter((e) => e.isIntersecting).map((e) => e.target);
+            if (entering.length) revealTiles(entering);
+          },
+          // A row must scroll up past this point (not just barely clip the
+          // viewport's bottom pixel) before it triggers — a deliberate
+          // "you've reached it" point partway up the screen, rather than an
+          // instant tick the moment 1px shows.
+          { rootMargin: `0px 0px -${TILE_TRIGGER_FRAC * 100}% 0px`, threshold: 0 }
+        );
+      }
+      tileRevealCallbacks.set(el, onReveal);
+      tileRevealObserver.observe(el);
+    }
+
+    const HOVER_OPACITY = 0.41;
+    const HOVER_OPACITY_MS = 50;
+    const TYPEWRITER_CHAR_MS = 4;
+
+    function Card({ card, hoverFilter, activeFilter, hoverMagnetSuppressed, posOverride }) {
+      const { iw, ih, offsetX, captionTop } = computeImage(card);
+      // Every visit: starts hidden/unloaded and only fades in once this
+      // card's wrapper has scrolled up to the observer's trigger point
+      // (see scheduleTileReveal) AND its image has finished loading.
+      const [loaded, setLoaded] = useState(false);
+      // Separate from `loaded` (image fetch done): this tracks whether it's
+      // this card's "turn" in the right-to-left, 50ms-apart reveal order —
+      // the image only actually fades in once both are true.
+      const [revealed, setRevealed] = useState(false);
+      // Hovering the piece dims it to HOVER_OPACITY. `settled` flips true
+      // TILE_FADE_MS after the reveal fires — before that, further opacity
+      // changes still use the slow reveal duration; after it, hover
+      // toggling uses the fast HOVER_OPACITY_MS instead, so the two
+      // transitions never fight over the same CSS property with two
+      // different speeds at once. This is a plain timer (not
+      // onTransitionEnd) deliberately: hovering mid-reveal would redirect
+      // the in-flight opacity transition before it ever reached its end
+      // value, so "transitionend" would never fire and settled would get
+      // stuck false — a real bug that made hovering a just-revealed tile
+      // feel slow/broken (still animating at 500ms instead of 50ms).
+      const [hovered, setHovered] = useState(false);
+      const [settled, setSettled] = useState(false);
+      const wrapperRef = useRef(null);
+
+      useEffect(() => {
+        const el = wrapperRef.current;
+        if (!el) return;
+        scheduleTileReveal(el, () => setRevealed(true));
+      }, []);
+
+      // Hover "magnet" preview: while a matched color/material word is
+      // hovered (see FILTER_MATCHES) — and only when the *deepest* available
+      // committed result isn't already showing — this card's own matches
+      // pull into a loose cluster at the center of the current viewport and
+      // grow, while every other card on the page dims. Purely transient: it
+      // snaps back (magnetTransform → null → transform: none) the instant
+      // the mouse leaves, unlike the click-committed fly-to-RED_FILTER_LAYOUT
+      // animation below, which persists until ניקוי. Gating on
+      // hoverMagnetSuppressed rather than activeFilter directly is what
+      // lets this still preview a *further* narrowing (e.g. hovering "אבן"
+      // while "אדום" is already committed) instead of only ever working
+      // from the untouched grid — see App's own comment on
+      // colorFilter/materialFilter.
+      const hoverFilterGroup = FILTER_MATCHES[hoverFilter];
+      const isHoverMagnetTarget = !hoverMagnetSuppressed && !!hoverFilterGroup && hoverFilterGroup.includes(card.id);
+      const hoverFilterDimmed = !hoverMagnetSuppressed && !!hoverFilter && !isHoverMagnetTarget;
+      // Once ANY filter is committed (click, not just hover), every card's
+      // normal-grid version hides — its own matches get replaced by their
+      // RedFilterCard double (or, for silver-hoard-bead, just slid via
+      // posOverride below), and every non-matching card simply has nothing
+      // to replace it, freeing up that filter's own shorter canvas.
+      const hiddenByCommittedFilter = !!activeFilter && card.id !== "silver-hoard-bead";
+      // A card below the fold that's never scrolled into view yet has
+      // revealed=false/settled=false — its image is still sitting at
+      // opacity 0, waiting on the *slow* TILE_FADE_MS reveal transition
+      // (see the img's own style below). Getting yanked into the cluster
+      // shouldn't also play that reveal fade — that's what produced a
+      // strange ~900ms crossfade the first time a given card ever became a
+      // magnet target (every later hover has nothing left to reveal, so it
+      // never showed up again). Forcing both flags the instant a card
+      // becomes a target makes it already-visible before the fast magnet
+      // transform even starts.
+      useEffect(() => {
+        if (!isHoverMagnetTarget) return;
+        setRevealed(true);
+        setSettled(true);
+      }, [isHoverMagnetTarget]);
+
+      // Typewriter reveal for the description overlay: on hover, characters
+      // appear one at a time at a fast, fixed interval rather than the whole
+      // paragraph showing at once. On mouse-leave it reverses the same way,
+      // erasing one character at a time back down to zero (instead of just
+      // snapping to 0), so the effect reads as symmetric in both directions.
+      const [typedLength, setTypedLength] = useState(0);
+      useEffect(() => {
+        if (!card.description) return;
+        const typingIn = hovered;
+        const id = setInterval(() => {
+          setTypedLength((n) => {
+            const done = typingIn ? n >= card.description.length : n <= 0;
+            if (done) {
+              clearInterval(id);
+              return n;
+            }
+            return typingIn ? n + 1 : n - 1;
+          });
+        }, TYPEWRITER_CHAR_MS);
+        return () => clearInterval(id);
+      }, [hovered]);
+
+      const isRevealed = loaded && revealed;
+      useEffect(() => {
+        if (!isRevealed) return;
+        const id = setTimeout(() => setSettled(true), TILE_FADE_MS);
+        return () => clearTimeout(id);
+      }, [isRevealed]);
+      // Caption hugs the *visible artwork*, not the padded image box: its
+      // ends land on the artwork's real left/right edges (title at the
+      // start/right, date at the end/left), matching the reference. Most
+      // files have pure-white side padding that's invisible on the cream
+      // page — spanning the full box used to fling the date out into that
+      // padding and under the neighbor. Still clamped to the 1728 canvas so
+      // an edge card's text can't run off-screen.
+      const [lf, rf] = CONTENT_FRAC[card.image.split("/").pop()] || [0, 1];
+      const artLeft = offsetX + lf * iw;
+      const artRight = offsetX + rf * iw;
+      const [tf, bf] = CONTENT_FRAC_Y[card.image.split("/").pop()] || [0, 1];
+      const artTop = tf * ih;
+      const artBottom = bf * ih;
+      // Position math for the hover magnet preview (see isHoverMagnetTarget
+      // above): measured in real screen pixels via getBoundingClientRect
+      // rather than in Figma/CARDS units, since the card's own left/top are
+      // a responsive calc() (scalePx) — only a live layout measurement
+      // lines up with the actual rendered position regardless of viewport
+      // width or scroll position. wrapperRef's *height* specifically can't
+      // be used for this, though — every one of its children is absolutely
+      // positioned, so the wrapper itself never gains a real height (it
+      // measures 0), and rect.top + rect.height/2 would silently collapse
+      // to rect.top (the box's top edge, not its center) rather than the
+      // true visual middle. Its left/top/width are still real (width is an
+      // explicit style), so combined with the already-computed artLeft/
+      // Right/Top/Bottom (the real artwork bounds, not the padded iw×ih
+      // box) they're enough to derive the actual on-screen center directly.
+      // Resetting to null snaps the transform back to "none", which is what
+      // animates the return trip — no separate stored "original position"
+      // needed.
+      const [hoverMagnetTransform, setHoverMagnetTransform] = useState(null);
+      useEffect(() => {
+        if (!isHoverMagnetTarget) {
+          setHoverMagnetTransform(null);
+          return;
+        }
+        const el = wrapperRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const scale = rect.width / card.w;
+        const cx = rect.left + ((artLeft + artRight) / 2) * scale;
+        const cy = rect.top + ((artTop + artBottom) / 2) * scale;
+        const idx = hoverFilterGroup.indexOf(card.id);
+        const angle = (idx / hoverFilterGroup.length) * Math.PI * 2;
+        const targetX = window.innerWidth / 2 + Math.cos(angle) * MAGNET_CLUSTER_RADIUS;
+        const targetY = window.innerHeight / 2 + Math.sin(angle) * MAGNET_CLUSTER_RADIUS;
+        setHoverMagnetTransform({ x: targetX - cx, y: targetY - cy, scale: MAGNET_SCALE });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [isHoverMagnetTarget]);
+      // descOffsetX/Y: a handful of cards needed a small manual nudge after
+      // eyeballing against the references — either the text sat a touch too
+      // far left of the artwork's true right edge, or (annunciation,
+      // beheaded-sun) too high in dead space above the actual image content.
+      const descTop = artTop + (card.descOffsetY || 0);
+      // The blurb is a right-flush column, never the artwork's full width —
+      // but exactly how narrow varies per piece (a small square crop reads
+      // near edge-to-edge while a big wide painting reads at roughly half),
+      // so each card with a description was measured directly against its
+      // own reference screenshot and given its own descWidthFrac. 0.52 is
+      // just the fallback for anything unmeasured.
+      const descWidthFrac = card.descWidthFrac !== undefined ? card.descWidthFrac : 0.52;
+      const descOffsetX = card.descOffsetX || 0;
+      // capInsetL/R pull the title/date in from the artwork's edges when the
+      // caption text itself is wider than the box (e.g. annunciation's long
+      // subtitle overran the painting's left edge) — a text-length fix, not
+      // an artwork-crop one, so it's kept separate from CONTENT_FRAC.
+      const capLeft = Math.max(artLeft, -card.x) + (card.capInsetL || 0);
+      const capWidth = Math.min(artRight, FRAME_W - card.x) - capLeft - (card.capInsetR || 0);
+      return (
+        <div
+          id={"card-" + card.id}
+          ref={wrapperRef}
+          data-tile-x={card.x}
+          className="absolute"
+          style={{
+            left: scalePx(posOverride ? posOverride.x : card.x),
+            top: scalePx(posOverride ? posOverride.y : card.y),
+            width: scalePx(card.w),
+            transform: hoverMagnetTransform
+              ? `translate(${hoverMagnetTransform.x}px, ${hoverMagnetTransform.y}px) scale(${hoverMagnetTransform.scale})`
+              : "none",
+            zIndex: isHoverMagnetTarget ? 20 : undefined,
+            // Every card except silver-hoard-bead (the one that just slides
+            // via posOverride) disappears once a filter result is
+            // committed — its other match(es) get replaced by their own
+            // RedFilterCard double (see App), everything else simply isn't
+            // part of the result.
+            opacity: hiddenByCommittedFilter ? 0 : hoverFilterDimmed ? 0.15 : 1,
+            pointerEvents: hiddenByCommittedFilter ? "none" : undefined,
+            // easeInOutCubic on transform, not an ease-out: an ease-out curve
+            // front-loads most of a card's (often several-thousand-px,
+            // off-screen) journey into its first sliver of the transition
+            // and crawls the rest, which reads as "it just appeared" rather
+            // than travel. This ramps up to full speed through the middle
+            // of the transition and only decelerates right at the very end,
+            // so the motion itself stays visible despite the short
+            // duration. left/top use the same curve at the slower
+            // RED_FILTER_FLY_MS pace, matching RedFilterCard's own flight
+            // duration — only silver-hoard-bead ever actually moves via
+            // those two properties, everyone else's left/top never change.
+            transition: `transform 220ms cubic-bezier(0.65, 0, 0.35, 1), opacity 300ms ease, left ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1), top ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
+          }}
+        >
+          {/* Photo at its own natural aspect (never letterboxed/stretched):
+              full box width when it fits, otherwise shrunk to the box
+              height and centred — see computeImage. object-cover here only
+              trims sub-pixel rounding since iw/ih already match the aspect.
+              pointer-events-none: hovering is driven by the narrower hitbox
+              below (real artwork bounds only), not this full padded box —
+              cards deliberately overlap (see x/y comments above), and many
+              of those overlaps are large enough that hovering one card's
+              plain white padding would otherwise dim a completely different,
+              unrelated card sitting underneath in DOM order. */}
+          <img
+            src={card.image}
+            alt={card.title}
+            loading="lazy"
+            onLoad={() => setLoaded(true)}
+            className="absolute pointer-events-none"
+            style={{
+              left: scalePx(offsetX),
+              top: 0,
+              width: scalePx(iw),
+              height: scalePx(ih),
+              objectFit: "cover",
+              objectPosition: card.coverTop ? "top" : "center",
+              // When a hoverImage exists, this base image fades all the way
+              // out (0) instead of just dimming — the hoverImage sibling
+              // below fades in over it, so hovering crossfades to that
+              // detail shot rather than just darkening this one.
+              opacity: !isRevealed ? 0 : hovered ? (card.hoverImage ? 0 : HOVER_OPACITY) : 1,
+              transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+            }}
+          />
+          {/* Only 3 of the 27 cards have a second, closer-in detail shot
+              (matching those specific instances' own hover variant in the
+              Figma file) — crossfades in over the base image on hover,
+              dimmed the same HOVER_OPACITY as every other hovered piece. */}
+          {card.hoverImage && (
+            <img
+              src={card.hoverImage}
+              alt=""
+              aria-hidden="true"
+              className="absolute pointer-events-none"
+              style={{
+                left: scalePx(offsetX),
+                top: 0,
+                width: scalePx(iw),
+                height: scalePx(ih),
+                objectFit: "cover",
+                objectPosition: card.coverTop ? "top" : "center",
+                opacity: isRevealed && hovered ? HOVER_OPACITY : 0,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            />
+          )}
+          {/* The actual hover trigger: just the real artwork's rectangle
+              (artLeft/artRight horizontally, artTop/artBottom vertically),
+              not the padded image box — see the img's own comment above for
+              why. Most files only need the horizontal trim; a couple (see
+              CONTENT_FRAC_Y) have real content sitting in a narrow band
+              with lots of empty space above/below instead. */}
+          {/* Doubles as the link to the work's own page. Rendering an <a>
+              with no href when the work has no inner page yet degrades to a
+              plain box — no pointer cursor, not focusable. */}
+          <a
+            href={(window.ARTWORK_HREF || {})[card.id]}
+            className="absolute pointer-events-auto"
+            style={{ left: scalePx(artLeft), top: scalePx(artTop), width: scalePx(artRight - artLeft), height: scalePx(artBottom - artTop) }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+          />
+          {/* The hover blurb: real museum copy (see CARDS), positioned over
+              the artwork's own visible bounds and clipped to however much
+              fits there — most of these paragraphs are far longer than a
+              tile can show, and that's fine, it's meant to read as an
+              excerpt, matching the reference. Types on character-by-
+              character at TYPEWRITER_CHAR_MS (see typedLength above) rather
+              than appearing all at once. Only rendered for cards that have
+              one (see CARDS' own comment — not all 27 do yet). */}
+          {card.description && (
+            <div
+              className="absolute overflow-hidden pointer-events-none text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(Math.max(artLeft + 14, artRight - 14 - (artRight - artLeft) * descWidthFrac) + descOffsetX),
+                top: scalePx(descTop + 12),
+                width: scalePx((artRight - artLeft) * descWidthFrac - 14),
+                height: scalePx(Math.max(0, (artBottom - descTop) * 0.8)),
+                fontFamily: FONT_THEBASICS,
+                fontWeight: 500,
+                fontSize: scalePx(16),
+                lineHeight: 1.28,
+                letterSpacing: "-0.01em",
+                color: "#28282a",
+                opacity: isRevealed && (hovered || typedLength > 0) ? 1 : 0,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            >
+              {card.description.slice(0, typedLength)}
+            </div>
+          )}
+          {/* Caption sits directly under the image, spanning its width
+              (clamped to the canvas): title flush right, artist/year flush
+              left. No background — it must read as plain text sitting on
+              the page, not a box. zIndex 1 still lifts it above any
+              earlier-DOM card image below (see card x/y comments above for
+              why boxes overlap by design). HoverWord gives the title/date
+              the same underline-sweep hover as every other piece of text on
+              the site, rather than plain static spans. */}
+          <div
+            className="absolute flex justify-between"
+            dir="rtl"
+            style={{
+              left: scalePx(capLeft),
+              top: scalePx(captionTop + (card.capDY || 0)),
+              width: scalePx(capWidth),
+              zIndex: 1,
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              fontSize: scalePx(16),
+              // Hidden outright (not just dimmed like the rest of a
+              // filtered-out card) while the hover-magnet preview is active
+              // — the title/date clutter the enlarged, overlapping preview
+              // cluster and don't read as useful at that size anyway. Only
+              // tied to the transient hover preview, not the click-committed
+              // result — there, silver-hoard-bead's caption is the real
+              // caption of the actual result and should stay visible.
+              opacity: hoverFilter ? 0 : 1,
+              transition: "opacity 180ms ease",
+            }}
+          >
+            <HoverWord label={card.title} active={hovered} />
+            <HoverWord label={card.subtitle} active={hovered} />
+          </div>
+        </div>
+      );
+    }
+
+    // The אדום-filtered result view (see RED_FILTER_LAYOUT): unlike Card
+    // above, these 6 boxes are cover-cropped (fill the given w×h exactly,
+    // no letterboxing) rather than contain-fit at the artwork's own aspect
+    // — that's how the dedicated Figma frame for this state renders them,
+    // and it's also just simpler than fighting Card's grid-specific
+    // contain/CONTENT_FRAC machinery for a one-off static result screen.
+    // Caption sits directly below the box (via percentage-based "100%"
+    // positioning, so it keeps tracking the box's own bottom edge for free
+    // as the box's height animates — no per-frame JS needed), in the same
+    // title-right/subtitle-left pattern as every other caption on the site.
+    //
+    // Always mounted (even before the filter is ever clicked), sitting
+    // invisibly at its card's normal-grid box — that's what lets the actual
+    // fly animation just be a plain two-value position/size CSS transition:
+    // on activation it's given the real RED_FILTER_LAYOUT box and fades in,
+    // and because both boxes live in the same raw 1728-wide canvas
+    // coordinate space, the browser interpolates the move+resize on its
+    // own. Card's own copy of this card fades out at the same time (see its
+    // own opacity rule), so the two crossfade into and out of each other
+    // right where the normal grid original was sitting.
+    function RedFilterCard({ card, target, active, hoverFilter }) {
+      const [pos, setPos] = useState({ x: card.x, y: card.y, w: card.w, h: card.h });
+      const rafIds = useRef([]);
+      const wrapperRef = useRef(null);
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        const next = active ? target : { x: card.x, y: card.y, w: card.w, h: card.h };
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setPos(next)));
+        }));
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [active]);
+
+      // Same hover-magnet preview as Card's (see its own comment) — only
+      // reachable once this specific committed result is already showing
+      // (active), for a hover on the *next* filter down the line (e.g.
+      // hovering "אבן" while "אדום" is already committed, previewing the
+      // narrower stone-only result before it's actually clicked). Card's
+      // own copy of a card sharing this same id is hidden at that point
+      // (see hiddenByCommittedFilter), so this is the only visible surface
+      // that CAN preview the motion for it.
+      const hoverFilterGroup = FILTER_MATCHES[hoverFilter];
+      const isHoverMagnetTarget = active && !!hoverFilterGroup && hoverFilterGroup.includes(card.id);
+      const [hoverMagnetTransform, setHoverMagnetTransform] = useState(null);
+      useEffect(() => {
+        if (!isHoverMagnetTarget) {
+          setHoverMagnetTransform(null);
+          return;
+        }
+        const el = wrapperRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const idx = hoverFilterGroup.indexOf(card.id);
+        const angle = (idx / hoverFilterGroup.length) * Math.PI * 2;
+        const targetX = window.innerWidth / 2 + Math.cos(angle) * MAGNET_CLUSTER_RADIUS;
+        const targetY = window.innerHeight / 2 + Math.sin(angle) * MAGNET_CLUSTER_RADIUS;
+        setHoverMagnetTransform({ x: targetX - cx, y: targetY - cy, scale: MAGNET_SCALE });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [isHoverMagnetTarget]);
+
+      // Same hover interaction as Card (dim the piece, crossfade in a
+      // hoverImage if it has one, type out `description` over the artwork,
+      // underline the caption) — these boxes are cover-cropped with no
+      // letterboxing, so unlike Card's narrower artLeft/Right/Top/Bottom
+      // hitbox, the *entire* box is real artwork and can be the hover
+      // target directly.
+      const [hovered, setHovered] = useState(false);
+      const [typedLength, setTypedLength] = useState(0);
+      useEffect(() => {
+        if (!card.description) return;
+        const typingIn = hovered;
+        const id = setInterval(() => {
+          setTypedLength((n) => {
+            const done = typingIn ? n >= card.description.length : n <= 0;
+            if (done) {
+              clearInterval(id);
+              return n;
+            }
+            return typingIn ? n + 1 : n - 1;
+          });
+        }, TYPEWRITER_CHAR_MS);
+        return () => clearInterval(id);
+      }, [hovered]);
+      // Same artLeft/Right/Top/Bottom bounds Card computes for its
+      // description overlay — the real visible artwork, excluding any
+      // baked-in white mat baked into the source photo — just measured
+      // against this box's own w/h instead of Card's iw/ih. Valid for the
+      // same reason capInsetL/R reused CONTENT_FRAC here (see
+      // RED_FILTER_LAYOUT's own comments): cover-crop shows ~the whole
+      // photo since every box's aspect nearly matches its source image's.
+      // target.fullBleed opts out of that (see STONE_FILTER_LAYOUT's own
+      // comment) for boxes whose aspect *doesn't* match the source photo's,
+      // where CONTENT_FRAC's fractions would misfire.
+      const imgFile = card.image.split("/").pop();
+      const [lf, rf] = target.fullBleed ? [0, 1] : CONTENT_FRAC[imgFile] || [0, 1];
+      const artLeft = lf * pos.w;
+      const artRight = rf * pos.w;
+      const [tf, bf] = target.fullBleed ? [0, 1] : CONTENT_FRAC_Y[imgFile] || [0, 1];
+      const artTop = tf * pos.h;
+      const artBottom = bf * pos.h;
+      const descWidthFrac = card.descWidthFrac !== undefined ? card.descWidthFrac : 0.52;
+      const descOffsetX = card.descOffsetX || 0;
+      // target.descOffsetY (set per RED_FILTER_LAYOUT/STONE_FILTER_LAYOUT
+      // entry) overrides the base card's own descOffsetY — needed because
+      // this box can be a very different size from the card's normal-grid
+      // box (e.g. pastilli-chair's filtered box is 881 tall vs its normal
+      // 561), so the same fixed offset that looks right in one leaves a
+      // much bigger absolute gap before the real artwork in the other.
+      const descTop = artTop + (target.descOffsetY !== undefined ? target.descOffsetY : (card.descOffsetY || 0));
+
+      return (
+        <div
+          ref={wrapperRef}
+          className="absolute"
+          style={{
+            left: scalePx(pos.x),
+            top: scalePx(pos.y),
+            width: scalePx(pos.w),
+            opacity: active ? 1 : 0,
+            pointerEvents: active ? "auto" : "none",
+            transform: hoverMagnetTransform
+              ? `translate(${hoverMagnetTransform.x}px, ${hoverMagnetTransform.y}px) scale(${hoverMagnetTransform.scale})`
+              : "none",
+            zIndex: isHoverMagnetTarget ? 20 : undefined,
+            transition: `left ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1), top ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1), width ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1), opacity 300ms ease, transform 220ms cubic-bezier(0.65, 0, 0.35, 1)`,
+          }}
+        >
+          {/* overflow-hidden lives ONLY on this inner image box, not on the
+              outer wrapper above — the caption below is a normal-flow
+              sibling of this box (not absolutely positioned past its
+              bottom edge), so putting overflow-hidden up on the wrapper
+              instead would clip the caption entirely, which is exactly
+              what was happening before this was split in two. */}
+          <div
+            className="relative overflow-hidden"
+            style={{ width: "100%", height: scalePx(pos.h), transition: `height ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1)` }}
+          >
+            <img
+              src={card.image}
+              alt={card.title}
+              className="absolute inset-0 w-full h-full"
+              style={{
+                objectFit: "cover",
+                objectPosition: "center",
+                opacity: hovered ? (card.hoverImage ? 0 : HOVER_OPACITY) : 1,
+                transition: `opacity ${HOVER_OPACITY_MS}ms ease-in`,
+              }}
+            />
+            {card.hoverImage && (
+              <img
+                src={card.hoverImage}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                style={{
+                  objectFit: "cover",
+                  objectPosition: "center",
+                  opacity: hovered ? HOVER_OPACITY : 0,
+                  transition: `opacity ${HOVER_OPACITY_MS}ms ease-in`,
+                }}
+              />
+            )}
+            <div
+              className="absolute inset-0"
+              style={{ pointerEvents: active ? "auto" : "none" }}
+              onMouseEnter={() => setHovered(true)}
+              onMouseLeave={() => setHovered(false)}
+            />
+            {card.description && (
+              <div
+                className="absolute overflow-hidden pointer-events-none text-right"
+                dir="rtl"
+                style={{
+                  left: scalePx(Math.max(artLeft + 14, artRight - 14 - (artRight - artLeft) * descWidthFrac) + descOffsetX),
+                  top: scalePx(descTop + 12),
+                  width: scalePx((artRight - artLeft) * descWidthFrac - 14),
+                  height: scalePx(Math.max(0, (artBottom - descTop) * 0.8)),
+                  fontFamily: FONT_THEBASICS,
+                  fontWeight: 500,
+                  fontSize: scalePx(16),
+                  lineHeight: 1.28,
+                  letterSpacing: "-0.01em",
+                  color: "#28282a",
+                  opacity: hovered || typedLength > 0 ? 1 : 0,
+                  transition: `opacity ${HOVER_OPACITY_MS}ms ease-in`,
+                }}
+              >
+                {card.description.slice(0, typedLength)}
+              </div>
+            )}
+          </div>
+          <div
+            className="relative flex justify-between"
+            dir="rtl"
+            style={{
+              zIndex: 1,
+              marginTop: scalePx(CARD_CAPTION_GAP + (target.capDY || 0)),
+              width: "100%",
+              paddingRight: scalePx(target.capInsetR || 0),
+              paddingLeft: scalePx(target.capInsetL || 0),
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              fontSize: scalePx(16),
+            }}
+          >
+            <HoverWord label={card.title} active={hovered} />
+            <HoverWord label={card.subtitle} active={hovered} />
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      // Same soft whole-page fade used on index.html's arrival from here
+      // (see its skipIntro/pageFadeIn) — this direction plays it
+      // unconditionally on every load, since there's no competing intro
+      // state machine to skip on this page.
+      const [pageFadeIn, setPageFadeIn] = useState(false);
+      useEffect(() => {
+        const id = setTimeout(() => setPageFadeIn(true), 60);
+        return () => clearTimeout(id);
+      }, []);
+      // This is a two-step "choose a color, then narrow by material" flow,
+      // not two independent toggles: colorFilter ("אדום") is the base
+      // committed result (RED_FILTER_LAYOUT, all 7 matches); materialFilter
+      // ("אבן") only ever narrows an already-chosen color down further (to
+      // just its own matches within that color, per STONE_FILTER_LAYOUT) —
+      // clicking אבן before a color is chosen does nothing (see
+      // onSelectFilter below). Both stay underlined at once when both are
+      // set (see FilterMenu's highlightedFilters), since they're two
+      // different filter dimensions being applied together, not
+      // alternatives. `activeFilter` is the single value that actually
+      // governs which layout is showing right now — materialFilter wins
+      // once set, since it's strictly narrower than colorFilter alone.
+      // ניקוי resets both back to the normal collage.
+      // hoverFilter is the separate, transient hover-preview word (see
+      // Card's isHoverMagnetTarget) — cleared whenever a filter commits so
+      // the two never fight over the same cards.
+      const [colorFilter, setColorFilter] = useState(null);
+      const [materialFilter, setMaterialFilter] = useState(null);
+      const activeFilter = materialFilter || colorFilter;
+      const [hoverFilter, setHoverFilter] = useState(null);
+      const [searchOpen, setSearchOpen] = useState(false);
+
+      return (
+        <div className="min-h-screen w-full bg-[#fffdfa] relative" dir="rtl">
+          {/* Fixed header overlay — pinned to the viewport, doesn't scroll.
+              Holds everything that stays put while the gallery scrolls
+              under it: nav (left), the motif tag row (center), the wordmark
+              mark (right), and the color/material filter menu (top-right,
+              below the wordmark). The description paragraph + circle
+              thumbnail are NOT here — they scroll away with the grid.
+              Deliberately outside the pageFadeIn wrapper below — the nav
+              bar stays fully visible immediately rather than fading in with
+              the rest of the page. */}
+          <div id="cc-header-overlay" className="fixed inset-x-0 top-0 z-30 flex justify-center pointer-events-none">
+            <div className={"relative " + CANVAS_W}>
+              <div className="absolute pointer-events-auto" style={{ insetInlineEnd: scalePx(24), top: scalePx(32) }}>
+                <TopNav onSearchToggle={() => setSearchOpen((v) => !v)} />
+              </div>
+              <div className="absolute pointer-events-auto" style={{ left: scalePx(614), top: scalePx(19) }}>
+                <MotifTagRow />
+              </div>
+              <HeaderWordmarkLink style={{ right: scalePx(24), top: scalePx(31), width: scalePx(247), height: scalePx(25) }} />
+              <div className="absolute" style={{ right: scalePx(24), top: scalePx(189) }}>
+                <FilterMenu
+                  highlightedFilters={[colorFilter, materialFilter].filter(Boolean)}
+                  onFilterHover={(opt) => {
+                    setHoverFilter(opt);
+                  }}
+                  onSelectFilter={(opt) => {
+                    setHoverFilter(null);
+                    if (opt === "אדום") {
+                      setColorFilter("אדום");
+                      setMaterialFilter(null);
+                    } else if (opt === "אבן") {
+                      // Only available once a color is already committed —
+                      // see the comment on colorFilter/materialFilter above.
+                      if (colorFilter) setMaterialFilter("אבן");
+                    }
+                  }}
+                  onClear={() => {
+                    setColorFilter(null);
+                    setMaterialFilter(null);
+                  }}
+                />
+              </div>
+              <SearchBar open={searchOpen} onClose={() => setSearchOpen(false)} />
+            </div>
+          </div>
+
+          <div
+            id="cc-canvas"
+            className={"relative mx-auto " + CANVAS_W}
+            style={{
+              height: scalePx(
+                activeFilter === "אדום" ? RED_FILTER_CANVAS_H : activeFilter === "אבן" ? STONE_FILTER_CANVAS_H : CANVAS_H
+              ),
+              // Both axes now, not just X: every card stays mounted (just
+              // opacity 0) even while a committed result's shorter canvas
+              // height is active, so the non-matching cards still sit
+              // at their tall normal-grid y positions below the visible
+              // fold — invisible, but without a Y clip they'd still expand
+              // the page's actual scrollable area past the intended
+              // shorter result.
+              overflow: "clip",
+              opacity: pageFadeIn ? 1 : 0,
+              transition: `opacity 500ms ease, height ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
+            }}
+          >
+            {/* Small looping preview of the same circle reel used on the
+                home page's hero, matching the design's little rounded
+                thumbnail next to the motif description. */}
+            <div
+              id="cc-circle-video"
+              className="absolute overflow-hidden"
+              style={{ left: scalePx(983), top: scalePx(189), width: scalePx(129), height: scalePx(64) }}
+            >
+              <video src="public/videos/circle_1.mp4" autoPlay loop muted playsInline className="w-full h-full object-cover" />
+            </div>
+
+            <p
+              id="cc-description"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(337),
+                top: scalePx(183),
+                width: scalePx(636),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                lineHeight: 1.21,
+                letterSpacing: "-0.2px",
+              }}
+            >
+              מעגל המעגל הוא צורה בלי התחלה וסוף, ולכן שימש לאורך תולדות האמנות כסימן לנצח, לשלמות ולמחזוריות. הוא הצורה של הקדושה,
+              ובתאוריית הרנסנס נחשב לצורה המושלמת ביותר. באמנות המודרנית הפך ליסוד פורמלי טהור.
+            </p>
+
+            {/* Every card stays mounted all the time now, whether or not a
+                committed result is active — that's what makes the
+                click-to-filter transition a plain CSS position/opacity
+                animation instead of a component swap: Card just gets told
+                to fade out (or, for silver-hoard-bead, to slide) while its
+                RedFilterCard double (for that filter's other match(es))
+                fades in and flies from that same normal-grid spot to its
+                own layout box. See Card's and RedFilterCard's own comments
+                for the mechanics. */}
+            {LAID_OUT_CARDS.map((card) => {
+              const beadPos =
+                card.id === "silver-hoard-bead" && activeFilter === "אדום"
+                  ? RED_FILTER_BEAD_POS
+                  : card.id === "silver-hoard-bead" && activeFilter === "אבן"
+                  ? STONE_FILTER_BEAD_POS
+                  : undefined;
+              return (
+                <Card
+                  key={card.id}
+                  // Merge the filter-state overrides (capInsetR to keep its
+                  // caption clear of red-sun's) into the card itself, since
+                  // caption geometry reads from `card`; posOverride only
+                  // moves the wrapper box.
+                  card={beadPos ? { ...card, ...beadPos } : card}
+                  hoverFilter={hoverFilter}
+                  activeFilter={activeFilter}
+                  hoverMagnetSuppressed={!!materialFilter}
+                  posOverride={beadPos}
+                />
+              );
+            })}
+            {RED_FILTER_LAYOUT.map((layout) => (
+              <RedFilterCard
+                key={"red-" + layout.id}
+                card={CARDS_BY_ID[layout.id]}
+                target={layout}
+                active={activeFilter === "אדום"}
+                hoverFilter={hoverFilter}
+              />
+            ))}
+            {STONE_FILTER_LAYOUT.map((layout) => (
+              <RedFilterCard
+                key={"stone-" + layout.id}
+                card={CARDS_BY_ID[layout.id]}
+                target={layout}
+                active={activeFilter === "אבן"}
+                hoverFilter={hoverFilter}
+              />
+            ))}
+
+            {/* Footer — same אודות / יצירת קשר + wordmark + about-copy
+                pattern as index.html's AboutSection, just laid out at this
+                page's own footer position instead of sticky mid-page. */}
+            <div
+              id="cc-footer-about"
+              className="absolute"
+              style={{
+                left: scalePx(167),
+                top: scalePx(
+                  activeFilter === "אדום"
+                    ? RED_FILTER_FOOTER_LINKS_TOP
+                    : activeFilter === "אבן"
+                    ? STONE_FILTER_FOOTER_LINKS_TOP
+                    : FOOTER_LINKS_TOP
+                ),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+                transition: `top ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
+              }}
+            >
+              <NavLink label="אודות" href="about.html" />
+            </div>
+            <div
+              id="cc-footer-contact"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(-128),
+                top: scalePx(
+                  activeFilter === "אדום"
+                    ? RED_FILTER_FOOTER_LINKS_TOP
+                    : activeFilter === "אבן"
+                    ? STONE_FILTER_FOOTER_LINKS_TOP
+                    : FOOTER_LINKS_TOP
+                ),
+                width: scalePx(240),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+                transition: `top ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
+              }}
+            >
+              <NavLink label="יצירת קשר" href="#contact" />
+            </div>
+            <p
+              id="cc-footer-paragraph"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                right: scalePx(23),
+                top: scalePx(
+                  activeFilter === "אדום"
+                    ? RED_FILTER_FOOTER_PARAGRAPH_TOP
+                    : activeFilter === "אבן"
+                    ? STONE_FILTER_FOOTER_PARAGRAPH_TOP
+                    : FOOTER_PARAGRAPH_TOP
+                ),
+                width: scalePx(875),
+                fontWeight: 500,
+                fontSize: scalePx(20),
+                lineHeight: 1.21,
+                letterSpacing: "-0.02em",
+                transition: `top ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
+              }}
+            >
+              <span style={{ fontFamily: FONT_MASADA }}>אוספי מוזיאון ישראל</span>
+              <span style={{ fontFamily: FONT_THEBASICS }}> מונים כ-500 אלף פריטים המשתרעים על כל קשת התרבות החומרית, מהפרהיסטוריה ועד ימינו. האוסף מאורגן בשלושה אגפים מרכזיים — ארכאולוגיה, אמנות, ואמנות יהודית — וכולל את האחזקות הגדולות בעולם של ארכאולוגיה מקראית וארץ-ישראלית, לצד אמנות יפה, צילום, עיצוב, אתנוגרפיה וחפצי פולחן.</span>
+            </p>
+            <AnimatedFooterWordmark
+              id="cc-footer-wordmark"
+              style={{
+                left: scalePx(24),
+                top: scalePx(
+                  activeFilter === "אדום"
+                    ? RED_FILTER_FOOTER_WORDMARK_TOP
+                    : activeFilter === "אבן"
+                    ? STONE_FILTER_FOOTER_WORDMARK_TOP
+                    : FOOTER_WORDMARK_TOP
+                ),
+                width: scalePx(1679),
+                height: scalePx(170),
+                transition: `top ${RED_FILTER_FLY_MS}ms cubic-bezier(0.65, 0, 0.35, 1)`,
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

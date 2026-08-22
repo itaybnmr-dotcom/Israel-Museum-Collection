@@ -1,0 +1,23 @@
+# <artwork-id> <figma-asset-url>   — regenerate when the ~7 day Figma URLs expire
+carnelian-bead https://www.figma.com/api/mcp/asset/092e16cd-e171-4aa6-8694-cf54b12fe02a.png
+athena-intaglio https://www.figma.com/api/mcp/asset/1ed04810-b0ce-4dab-beb4-3f6280c42e4f.png
+ardon-red-sun https://www.figma.com/api/mcp/asset/0db3eff7-ed7b-4b7a-80c2-36b4e0584546.png
+siren-mirror https://www.figma.com/api/mcp/asset/12a1a4d1-f1d8-4d63-a42b-7d1f1e8c68ca.png
+gottlieb-tangency https://www.figma.com/api/mcp/asset/d9ca5e3b-9e78-4bc9-8886-6f1d865d6748.png
+duchamp-bicycle-wheel https://www.figma.com/api/mcp/asset/7a4d0fcb-3df3-4115-8d9e-3b760ae3aa94.png
+annunciation https://www.figma.com/api/mcp/asset/ca7aa436-cc64-4ddc-933f-c7aa6f7dd876.png
+column-capital https://www.figma.com/api/mcp/asset/ed66c651-ced0-41fa-8a9c-82c5d126f0ba.png
+hoffmann-basket https://www.figma.com/api/mcp/asset/4f975905-44a8-4d91-b69f-368e55073fa1.png
+magritte-castle https://www.figma.com/api/mcp/asset/197636b7-7cde-44c5-99ae-6f1f90f4dafe.png
+wallstreet-abbott https://www.figma.com/api/mcp/asset/144fab30-c8d6-4bd4-b971-2ee889f83c77.png
+venetian-woman https://www.figma.com/api/mcp/asset/c98a6183-c65d-45d4-9007-93ac8ff94e28.png
+adam-rodin https://www.figma.com/api/mcp/asset/38b6e064-d333-42f1-8cef-9ec9fe99cda7.png
+totem-legend https://www.figma.com/api/mcp/asset/99fb19ec-f6fa-45d6-9d75-6754b8b46867.png
+flavin-untitled https://www.figma.com/api/mcp/asset/b917141a-5204-446f-9bd4-af1867e8cb16.png
+feininger-barns https://www.figma.com/api/mcp/asset/fafb11cf-fbd1-4a57-bc48-806f7f3d07b3.png
+duchamp-widow https://www.figma.com/api/mcp/asset/7e5cfced-4955-468c-a92c-6b69827613e8.png
+motherwell-guillotine https://www.figma.com/api/mcp/asset/506aaa05-44be-4ae6-abb0-3bc43c7e959c.png
+calf-temple https://www.figma.com/api/mcp/asset/68063e8b-80a6-49e2-82d7-bb6250349fd9.png
+gross-window https://www.figma.com/api/mcp/asset/7803f79e-a870-4c24-8aa1-dd3719adaf63.png
+albers-homage https://www.figma.com/api/mcp/asset/a4f793da-a948-477c-8048-f49da28760fa.png
+turrell-space https://www.figma.com/api/mcp/asset/80d4da70-9d39-430c-a066-60db156da9d3.png

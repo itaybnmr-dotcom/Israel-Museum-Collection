@@ -1,0 +1,1553 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>אוספי מוזיאון ישראל</title>
+  <meta name="description" content="אסופת שער — יצירות מתוך אוספי מוזיאון ישראל המאורגנות סביב מוטיב השער." />
+  <link rel="icon" type="image/svg+xml" href="public/images/favicon.svg" />
+  <link rel="preconnect" href="https://www.figma.com" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="artworks-data.js"></script>
+  <script src="search-engine.js"></script>
+  <style>
+    @view-transition {
+      navigation: auto;
+    }
+    ::view-transition-group(root) {
+      animation-duration: 0.42s;
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      mix-blend-mode: normal;
+    }
+    /* The nav bar carries a persistent view-transition-name (site-header) so
+       it morphs instead of cross-fading — but the browser still runs its
+       default old/new fade *underneath* that morph, and since the two
+       snapshots are almost-but-not-quite pixel-identical (font hinting,
+       subpixel rounding) that reads as a flicker. Freezing it removes that. */
+    ::view-transition-old(site-header),
+    ::view-transition-new(site-header) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+    /* Also freeze the group's own position/size interpolation — otherwise
+       even a 1px geometry mismatch between two pages' headers (they're
+       hand-tuned per page) makes it visibly slide during the crossfade. */
+    ::view-transition-group(site-header) {
+      animation: none;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Bold.otf') format('opentype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Masada';
+      src: url('public/fonts/Masada-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html, body {
+      background-color: #fffdfa;
+      color: #28282a;
+      font-family: 'TheBasics', 'Segoe UI', Arial, sans-serif;
+      font-weight: 500;
+    }
+
+    ::selection {
+      background-color: #28282a;
+      color: #fffdfa;
+    }
+  </style>
+</head>
+<body>
+  <!-- Static, JS-free header: React/ReactDOM/Babel-standalone all load from a
+       CDN and the whole page script has to be parsed and transpiled before
+       React paints anything, so on every navigation there's a real gap where
+       the document is blank and the nav bar vanishes. This markup needs no
+       JS at all, so it paints on the very first frame and carries the
+       site-header view-transition name itself (the React-rendered header
+       below no longer claims it — a name can only be claimed by one element
+       at a time). It sits one z-index below the real header and is never
+       removed; once React mounts, its own header simply covers this one, so
+       there's no visible swap — as long as both agree on exact geometry
+       (right/top/width/height/gap below), which is why those are hardcoded
+       to match every page's own HeaderWordmarkLink/TopNav values exactly
+       rather than copy-pasted loosely. -->
+  <div style="position:fixed;inset-inline:0;top:0;z-index:29;display:flex;justify-content:center;pointer-events:none;view-transition-name:site-header;">
+    <div dir="rtl" style="position:relative;width:min(1728px,100vw);">
+      <a href="index.html" style="position:absolute;right:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.017940);width:calc(min(1728px,100vw) * 0.142940);height:calc(min(1728px,100vw) * 0.014468);pointer-events:auto;display:block;">
+        <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style="width:100%;height:100%;display:block;" />
+      </a>
+      <nav dir="rtl" style="position:absolute;inset-inline-end:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.018519);display:flex;align-items:center;gap:20px;pointer-events:auto;font-family:'TheBasics','Segoe UI',Arial,sans-serif;font-weight:500;font-size:calc(min(1728px,100vw) * 0.011574);letter-spacing:0.2px;">
+        <a href="index.html#about" style="color:#28282a;text-decoration:none;">אסופות</a>
+        <a href="collection-index.html" style="color:#28282a;text-decoration:none;">אינדקס</a>
+        <a href="search.html" style="color:#28282a;text-decoration:none;">חיפוש</a>
+        <a href="about.html" style="color:#28282a;text-decoration:none;">אודות</a>
+      </nav>
+    </div>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useRef, useEffect } = React;
+
+    const FONT_THEBASICS = "TheBasics, \"Segoe UI\", Arial, sans-serif";
+    const FONT_MASADA = "Masada, \"Segoe UI\", Arial, sans-serif";
+
+    const TILE_FADE_MS = 500;
+
+    const HERO_VIDEOS = [
+      "public/videos/circle_1.mp4",
+      "public/videos/vertical_landscape.mp4",
+      "public/videos/window_1.mp4",
+      "public/videos/motion.mp4",
+      "public/videos/shard_1.mp4",
+    ];
+
+    const WORDMARK_HOVER_FADE_MS = 200;
+
+    function HeaderWordmarkLink({ style }) {
+      const [video, setVideo] = useState(null);
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (video) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          closeTimer.current = setTimeout(() => setMounted(false), WORDMARK_HOVER_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [video]);
+
+      return (
+        <a
+          href="index.html"
+          className="absolute pointer-events-auto"
+          style={{ ...style, zIndex: 41 }}
+          onMouseEnter={() => setVideo(HERO_VIDEOS[Math.floor(Math.random() * HERO_VIDEOS.length)])}
+          onMouseLeave={() => setVideo(null)}
+          onClick={() => {
+            if (video) sessionStorage.setItem("heroVideo", video);
+          }}
+        >
+          <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%", display: "block", position: "relative", zIndex: 2 }} />
+          {mounted && (
+            <div
+              className="fixed inset-0 overflow-hidden pointer-events-none"
+              style={{ zIndex: 1, opacity: visible ? 1 : 0, transition: `opacity ${WORDMARK_HOVER_FADE_MS}ms ease` }}
+            >
+              <video key={video} src={video} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+            </div>
+          )}
+        </a>
+      );
+    }
+
+    const WORDMARK_ICONS = [
+      "public/images/icon-circle.svg",
+      "public/images/icon-verticality.svg",
+      "public/images/icon-gate.svg",
+      "public/images/icon-motion.svg",
+      "public/images/icon-fragment.svg",
+    ];
+    const WORDMARK_ICON_SLOTS = [
+      { left: 1135.5, top: 30.3, width: 122.4, height: 118.9 },
+      { left: 475.3, top: 30.3, width: 117.4, height: 118.9 },
+    ];
+    const WORDMARK_ICON_INTERVAL_MS = 200;
+
+    function CyclingIcon({ src, style }) {
+      return <img src={src} alt="" aria-hidden="true" style={{ ...style, objectFit: "contain" }} />;
+    }
+
+    function AnimatedFooterWordmark({ style, id }) {
+      const [tick, setTick] = useState(0);
+      useEffect(() => {
+        const id = setInterval(() => setTick((t) => t + 1), WORDMARK_ICON_INTERVAL_MS);
+        return () => clearInterval(id);
+      }, []);
+      return (
+        <div id={id} className="absolute" style={{ ...style, position: "absolute" }}>
+          <img src="public/images/wordmark-blank.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%" }} />
+          {WORDMARK_ICON_SLOTS.map((slot, i) => (
+            <CyclingIcon
+              key={i}
+              src={WORDMARK_ICONS[(tick + i * 2) % WORDMARK_ICONS.length]}
+              style={{ position: "absolute", left: scalePx(slot.left), top: scalePx(slot.top), width: scalePx(slot.width), height: scalePx(slot.height) }}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    const UNDERLINE_OFFSET = "0.08em";
+    const UNDERLINE_THICKNESS = "0.1em";
+
+    const FRAME_W = 1728;
+    const scalePx = (px) => `calc(min(${FRAME_W}px, 100vw) * ${(px / FRAME_W).toFixed(6)})`;
+    const CANVAS_W = "w-[1728px] max-w-full";
+
+    const NAV_ITEMS = [
+      { label: "אינדקס", href: "collection-index.html" },
+      { label: "חיפוש", href: "#search" },
+      { label: "אודות", href: "about.html" },
+    ];
+
+    const MOTIF_TAGS = [
+      { label: "מעגל", href: "collection-circle.html" },
+      { label: "אנכיות", href: "collection-verticality.html" },
+      { label: "שער", current: true },
+      { label: "תנועה", href: "collection-motion.html" },
+      { label: "שבר", href: "collection-shard.html" },
+    ];
+
+    const FILTER_ROWS = [
+      ["אדום", "כחול", "ירוק", "זהב"],
+      ["שחור", "לבן", "אבן", "זכוכית"],
+      ["מתכת", "עץ", "בד וטקסטיל"],
+      ["קרמיקה", "צבעי־שמן"],
+    ];
+
+    // Hover-preview-only data (same as collection-circle.html): real per-image
+    // visual inspection (colors sampled from the actual downloaded photos,
+    // materials cross-checked against each card's description), no forced
+    // matches. Not wired to COMMITTABLE_FILTERS, so clicking these does
+    // nothing yet — they only drive the hover-magnet preview (see
+    // FilterMenu/Card, FILTER_MATCHES[hoverFilter]).
+    const FILTER_MATCHES = {
+      "אדום": ["manray-lovers", "ribera-bartholomew", "flavin-untitled", "motherwell-guillotine"],
+      "כחול": ["turrell-space", "feininger-barns", "duchamp-widow"],
+      "ירוק": ["albers-homage", "sage-sky", "flavin-untitled"],
+      "זהב": ["gross-window"],
+      "שחור": [
+        "motherwell-guillotine",
+        "albers-homage",
+        "shahn-shelter",
+        "jaffa-gate",
+      ],
+      "לבן": [
+        "gross-window",
+        "evans-church",
+        "sage-sky",
+        "shahn-shelter",
+        "ribera-bartholomew",
+        "jaffa-gate",
+      ],
+      "אבן": ["hazor-gate"],
+      "זכוכית": ["flavin-untitled"],
+      "מתכת": ["calf-temple"],
+      "עץ": ["duchamp-widow"],
+      "בד וטקסטיל": ["christo-storefront"],
+      "קרמיקה": ["building-model", "calf-temple"],
+      "צבעי־שמן": [
+        "gross-window",
+        "albers-homage",
+        "sage-sky",
+        "manray-lovers",
+        "ribera-bartholomew",
+        "feininger-barns",
+        "motherwell-guillotine",
+      ],
+    };
+    const COMMITTABLE_FILTERS = [];
+
+    const FILTER_FADE_MS = 120;
+
+    function NavLink({ label, href, onClick }) {
+      const [visible, setVisible] = useState(false);
+      const [origin, setOrigin] = useState("right");
+      const [resetKey, setResetKey] = useState(0);
+      const rafIds = useRef([]);
+
+      function clearRafs() {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+      }
+      function handleEnter() {
+        // Clicking a focusable link fires onFocus even though the mouse
+        // never left — without this guard that replays the whole closed-
+        // then-sweep-in animation as a visible glitch right at the click.
+        if (visible) return;
+        clearRafs();
+        setOrigin("right");
+        setVisible(false);
+        setResetKey((k) => k + 1);
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+        }));
+      }
+      function handleLeave() {
+        clearRafs();
+        setOrigin("left");
+        setVisible(false);
+      }
+      const clipPath = visible ? "inset(0 0 0 0)" : origin === "right" ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)";
+
+      return (
+        <a
+          href={href}
+          onClick={onClick}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          onFocus={handleEnter}
+          onBlur={handleLeave}
+          className="relative inline-block text-[#28282a]"
+          style={{ textDecoration: "none" }}
+        >
+          {label}
+          <span
+            key={resetKey}
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              color: "transparent",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+              clipPath,
+              transition: "clip-path 0.16s ease",
+            }}
+          >
+            {label}
+          </span>
+        </a>
+      );
+    }
+
+    function HoverWord({ label, onClick, active, onHoverChange }) {
+      const [visible, setVisible] = useState(false);
+      const [origin, setOrigin] = useState("right");
+      const [resetKey, setResetKey] = useState(0);
+      const rafIds = useRef([]);
+      const isControlled = active !== undefined;
+
+      function clearRafs() {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+      }
+      function open() {
+        clearRafs();
+        setOrigin("right");
+        setVisible(false);
+        setResetKey((k) => k + 1);
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+        }));
+        onHoverChange && onHoverChange(true);
+      }
+      function close() {
+        clearRafs();
+        setOrigin("left");
+        setVisible(false);
+        onHoverChange && onHoverChange(false);
+      }
+
+      useEffect(() => {
+        if (!isControlled) return;
+        if (active) open(); else close();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [isControlled, active]);
+
+      const clipPath = visible ? "inset(0 0 0 0)" : origin === "right" ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)";
+
+      return (
+        <span
+          onMouseEnter={isControlled ? undefined : open}
+          onMouseLeave={isControlled ? undefined : close}
+          onFocus={isControlled ? undefined : open}
+          onBlur={isControlled ? undefined : close}
+          onClick={onClick}
+          tabIndex={isControlled ? undefined : 0}
+          className={"relative inline-block text-[#28282a]" + (isControlled ? "" : " cursor-pointer")}
+        >
+          {label}
+          <span
+            key={resetKey}
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              color: "transparent",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+              clipPath,
+              transition: "clip-path 0.16s ease",
+            }}
+          >
+            {label}
+          </span>
+        </span>
+      );
+    }
+
+    function TopNav({ onSearchToggle }) {
+      return (
+        <nav
+          id="cg-nav"
+          className="flex items-center gap-5 pointer-events-auto"
+          dir="rtl"
+          style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(20), letterSpacing: "0.2px" }}
+        >
+          <a
+            href="index.html#about"
+            onClick={() => {
+              sessionStorage.setItem("skipIntro", "1");
+              sessionStorage.setItem("scrollToAbout", "1");
+            }}
+            className="inline-block text-[#28282a]"
+            style={{
+              textDecoration: "none",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+            }}
+          >
+            אסופות
+          </a>
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.label}
+              label={item.label}
+              href={item.href}
+              // "חיפוש" doesn't navigate — it toggles the search bar (see
+              // SearchBar/App). stopPropagation keeps this same click from
+              // also being seen by SearchBar's document-level away-listener,
+              // which would otherwise immediately close what this just opened.
+              onClick={item.label === "חיפוש" ? (e) => { e.preventDefault(); e.stopPropagation(); onSearchToggle(); } : undefined}
+            />
+          ))}
+        </nav>
+      );
+    }
+
+    const SEARCH_FADE_MS = 180;
+    const SEARCH_PLACEHOLDER = "חפש.י לפי אסופה, יצירה או יוצר.ת...";
+    const SEARCH_MAX_RESULTS = 8;
+    const CARET_BLINK_MS = 530;
+
+    // Matching lives in search-engine.js so this dropdown and the full results
+    // page (search.html) can never disagree about what a query means. It
+    // returns the complete list; the dropdown shows the first
+    // SEARCH_MAX_RESULTS and links the rest through to search.html.
+    function searchArtworks(query) {
+      return window.MuseumSearch.run(query).results;
+    }
+
+    function SearchBar({ open, onClose }) {
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const [query, setQuery] = useState("");
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+      const wrapperRef = useRef(null);
+      const inputRef = useRef(null);
+      const allResults = searchArtworks(query);
+      const results = allResults.slice(0, SEARCH_MAX_RESULTS);
+
+      function goToResult(art) {
+        window.location.href = "artwork.html?id=" + art.id;
+      }
+
+      // Fake caret matching the stroke's own weight (scalePx(4)) — the real
+      // <input> keeps native focus/selection/typing, but its own caret is
+      // hidden (caret-color: transparent) since browsers don't expose a way
+      // to make that thin native bar match our 4px line. This bar is
+      // repositioned by measuring the pre-cursor substring on a scratch
+      // canvas (matching the input's own live computed font), same
+      // measure-in-browser technique used throughout this file for text
+      // fitting — cheap enough to run on every keystroke.
+      const [caretOffset, setCaretOffset] = useState(0);
+      const [caretOn, setCaretOn] = useState(true);
+      const [caretFocused, setCaretFocused] = useState(false);
+      const measureCtxRef = useRef(null);
+      const blinkTimerRef = useRef(null);
+
+      function measureCaret() {
+        const el = inputRef.current;
+        if (!el) return;
+        if (!measureCtxRef.current) measureCtxRef.current = document.createElement("canvas").getContext("2d");
+        const cs = getComputedStyle(el);
+        measureCtxRef.current.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+        setCaretOffset(measureCtxRef.current.measureText(el.value.slice(0, pos)).width);
+      }
+
+      function restartBlink() {
+        setCaretOn(true);
+        clearInterval(blinkTimerRef.current);
+        blinkTimerRef.current = setInterval(() => setCaretOn((v) => !v), CARET_BLINK_MS);
+      }
+
+      useEffect(() => {
+        if (!caretFocused) { clearInterval(blinkTimerRef.current); return; }
+        restartBlink();
+        return () => clearInterval(blinkTimerRef.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [caretFocused]);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (open) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          setQuery("");
+          if (inputRef.current) inputRef.current.value = "";
+          closeTimer.current = setTimeout(() => setMounted(false), SEARCH_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [open]);
+
+      useEffect(() => {
+        if (open && visible && inputRef.current) inputRef.current.focus();
+      }, [open, visible]);
+
+      // Click-away and Escape both close it. This listens on "click" (not
+      // "mousedown") specifically so the toggle's own stopPropagation — fired
+      // during the same click event — can suppress it; a mousedown listener
+      // would fire on a different, earlier event and miss that suppression.
+      useEffect(() => {
+        if (!open) return;
+        function onDocClick(e) {
+          if (wrapperRef.current && !wrapperRef.current.contains(e.target)) onClose();
+        }
+        function onKeyDown(e) {
+          if (e.key === "Escape") onClose();
+          if (e.key === "Enter") {
+            // Enter goes to the full results list rather than jumping straight
+            // into the top hit — a query like "אדום" has 27 matches and the
+            // dropdown only ever shows 8 of them.
+            window.location.href = window.MuseumSearch.urlFor(inputRef.current ? inputRef.current.value : "");
+          }
+        }
+        document.addEventListener("click", onDocClick);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+          document.removeEventListener("click", onDocClick);
+          document.removeEventListener("keydown", onKeyDown);
+        };
+      }, [open, onClose]);
+
+      if (!mounted) return null;
+
+      return (
+        <div
+          ref={wrapperRef}
+          className="absolute pointer-events-auto"
+          style={{
+            left: 0,
+            right: 0,
+            top: scalePx(0),
+            height: scalePx(70),
+            zIndex: 50,
+            backgroundColor: "#fffdfa",
+            opacity: visible ? 1 : 0,
+            transition: `opacity ${SEARCH_FADE_MS}ms ease`,
+          }}
+        >
+          <div
+            className="absolute"
+            style={{ left: 0, right: 0, top: scalePx(66), borderBottom: `${scalePx(4)} solid #28282a` }}
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            dir="rtl"
+            placeholder={SEARCH_PLACEHOLDER}
+            className="absolute bg-transparent outline-none text-right placeholder:text-[#28282a]"
+            style={{
+              right: scalePx(15),
+              left: scalePx(15),
+              top: scalePx(10),
+              height: scalePx(56),
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              fontSize: scalePx(58),
+              lineHeight: 1.21,
+              color: "#28282a",
+              caretColor: "transparent",
+            }}
+            onFocus={() => { setCaretFocused(true); setQuery(inputRef.current.value); measureCaret(); restartBlink(); }}
+            onBlur={() => setCaretFocused(false)}
+            onInput={(e) => { setQuery(e.target.value); measureCaret(); restartBlink(); }}
+            onKeyUp={() => { measureCaret(); restartBlink(); }}
+            onClick={() => { measureCaret(); restartBlink(); }}
+          />
+          {caretFocused && query && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                right: `calc(${scalePx(15)} + ${caretOffset}px)`,
+                top: scalePx(8),
+                height: scalePx(48),
+                width: scalePx(4),
+                backgroundColor: "#28282a",
+                opacity: caretOn ? 1 : 0,
+              }}
+            />
+          )}
+          {query.trim() && (
+            <div
+              className="absolute"
+              style={{
+                left: 0,
+                right: 0,
+                top: scalePx(70),
+                backgroundColor: "#fffdfa",
+              }}
+            >
+              {results.length === 0 ? (
+                <div
+                  dir="rtl"
+                  className="text-right"
+                  style={{
+                    padding: `${scalePx(18)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  אין תוצאות
+                </div>
+              ) : (
+                results.map((art, i) => (
+                  <div
+                    key={art.id}
+                    dir="rtl"
+                    onClick={() => goToResult(art)}
+                    className="flex items-baseline justify-between cursor-pointer"
+                    style={{
+                      padding: `${scalePx(14)} ${scalePx(15)}`,
+                      borderBottom: (i < results.length - 1 || allResults.length > results.length) ? "1px solid rgba(40, 40, 42, 0.2)" : "none",
+                      fontFamily: FONT_THEBASICS,
+                    }}
+                  >
+                    <span style={{ fontWeight: 500, fontSize: scalePx(22) }}>
+                      {art.title}
+                      {art.artist && (
+                        <span style={{ fontWeight: 400, color: "rgba(40, 40, 42, 0.6)" }}> {art.artist}</span>
+                      )}
+                    </span>
+                    <span style={{ fontSize: scalePx(16), color: "rgba(40, 40, 42, 0.5)", flexShrink: 0, marginInlineStart: scalePx(12) }}>
+                      {art.motif}
+                    </span>
+                  </div>
+                ))
+              )}
+              {allResults.length > results.length && (
+                <div
+                  dir="rtl"
+                  onClick={() => { window.location.href = window.MuseumSearch.urlFor(query); }}
+                  className="text-right cursor-pointer"
+                  style={{
+                    padding: `${scalePx(14)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  {`כל התוצאות (${allResults.length})`}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function MotifTagRow() {
+      return (
+        <div
+          id="cg-motif-row"
+          className="flex items-baseline gap-3"
+          dir="rtl"
+          style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(40), letterSpacing: "-0.8px" }}
+        >
+          {MOTIF_TAGS.map((tag, i) => {
+            const text = i < MOTIF_TAGS.length - 1 ? tag.label + "," : tag.label;
+            return tag.current ? (
+              <span
+                key={tag.label}
+                style={{
+                  textDecorationLine: "underline",
+                  textDecorationColor: "#28282a",
+                  textDecorationThickness: UNDERLINE_THICKNESS,
+                  textUnderlineOffset: UNDERLINE_OFFSET,
+                  textDecorationSkipInk: "auto",
+                }}
+              >
+                {text}
+              </span>
+            ) : (
+              <NavLink key={tag.label} label={text} href={tag.href} />
+            );
+          })}
+        </div>
+      );
+    }
+
+    function FilterMenu({ highlightedFilters, onFilterHover, onSelectFilter, onClear }) {
+      const [open, setOpen] = useState(true);
+      const [mounted, setMounted] = useState(true);
+      const [visible, setVisible] = useState(true);
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (open) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          closeTimer.current = setTimeout(() => setMounted(false), FILTER_FADE_MS);
+          onFilterHover && onFilterHover(null);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [open]);
+
+      if (!mounted) {
+        return (
+          <img
+            src="public/images/icon-gate.svg"
+            alt="סינון"
+            role="button"
+            aria-expanded={open}
+            className="cursor-pointer pointer-events-auto"
+            onClick={() => setOpen(true)}
+            style={{ width: scalePx(43), height: scalePx(42) }}
+          />
+        );
+      }
+      return (
+        <div id="cg-filter-menu" className="pointer-events-auto" style={{ position: "relative", width: scalePx(600) }}>
+          <img
+            src="public/images/icon-gate.svg"
+            alt="סינון"
+            role="button"
+            aria-expanded={open}
+            className="cursor-pointer"
+            onClick={() => setOpen(false)}
+            style={{ position: "absolute", top: 0, right: 0, width: scalePx(43), height: scalePx(42) }}
+          />
+          <div
+            className="text-right"
+            dir="rtl"
+            style={{
+              fontFamily: FONT_THEBASICS,
+              fontSize: scalePx(40),
+              lineHeight: 1.15,
+              opacity: visible ? 1 : 0,
+              transition: `opacity ${FILTER_FADE_MS}ms ease`,
+            }}
+          >
+            {FILTER_ROWS.map((row, ri) => (
+              <div key={ri} style={ri === 0 ? { paddingRight: scalePx(59) } : undefined}>
+                {row.map((opt, i) => (
+                  <React.Fragment key={opt}>
+                    {highlightedFilters.includes(opt) ? (
+                      <span
+                        style={{
+                          textDecorationLine: "underline",
+                          textDecorationColor: "#28282a",
+                          textDecorationThickness: UNDERLINE_THICKNESS,
+                          textUnderlineOffset: UNDERLINE_OFFSET,
+                          textDecorationSkipInk: "auto",
+                        }}
+                      >
+                        {opt}
+                      </span>
+                    ) : (
+                      <HoverWord
+                        label={opt}
+                        onClick={COMMITTABLE_FILTERS.includes(opt) ? () => onSelectFilter(opt) : undefined}
+                        onHoverChange={
+                          FILTER_MATCHES[opt] && onFilterHover ? (h) => onFilterHover(h ? opt : null) : undefined
+                        }
+                      />
+                    )}
+                    {i < row.length - 1 && (
+                      <span style={{ marginInline: scalePx(10) }}>/</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            ))}
+            <div style={{ marginTop: scalePx(70) }}>
+              <HoverWord
+                label="ניקוי"
+                onClick={() => {
+                  onFilterHover && onFilterHover(null);
+                  onClear && onClear();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const TILE_STAGGER_MS = 50;
+    const TILE_TRIGGER_FRAC = 0.2;
+    let tileRevealObserver = null;
+    let tileRevealClock = 0;
+    const tileRevealCallbacks = new Map();
+    let scrollListenerAttached = false;
+    let scrollCheckQueued = false;
+
+    let pendingRevealEls = [];
+    let revealRafQueued = false;
+
+    function flushRevealTiles() {
+      revealRafQueued = false;
+      const els = pendingRevealEls;
+      pendingRevealEls = [];
+      els.sort((a, b) => Number(b.dataset.tileX) - Number(a.dataset.tileX));
+      els.forEach((el) => {
+        tileRevealObserver.unobserve(el);
+        const cb = tileRevealCallbacks.get(el);
+        if (!cb) return;
+        tileRevealCallbacks.delete(el);
+        const now = Date.now();
+        const at = Math.max(now, tileRevealClock + TILE_STAGGER_MS);
+        tileRevealClock = at;
+        setTimeout(cb, at - now);
+      });
+    }
+
+    function revealTiles(els) {
+      els.forEach((el) => {
+        if (tileRevealCallbacks.has(el)) pendingRevealEls.push(el);
+      });
+      if (!revealRafQueued) {
+        revealRafQueued = true;
+        requestAnimationFrame(flushRevealTiles);
+      }
+    }
+
+    function checkPendingTiles() {
+      scrollCheckQueued = false;
+      const triggerLine = window.innerHeight * (1 - TILE_TRIGGER_FRAC);
+      const ready = [];
+      tileRevealCallbacks.forEach((_, el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < triggerLine || rect.bottom < 0) ready.push(el);
+      });
+      if (ready.length) revealTiles(ready);
+    }
+
+    function ensureTileScrollBackstop() {
+      if (scrollListenerAttached) return;
+      scrollListenerAttached = true;
+      window.addEventListener(
+        "scroll",
+        () => {
+          if (scrollCheckQueued) return;
+          scrollCheckQueued = true;
+          requestAnimationFrame(checkPendingTiles);
+        },
+        { passive: true }
+      );
+    }
+
+    function scheduleTileReveal(el, onReveal) {
+      ensureTileScrollBackstop();
+      if (!tileRevealObserver) {
+        tileRevealObserver = new IntersectionObserver(
+          (entries) => {
+            const entering = entries.filter((e) => e.isIntersecting).map((e) => e.target);
+            if (entering.length) revealTiles(entering);
+          },
+          { rootMargin: `0px 0px -${TILE_TRIGGER_FRAC * 100}% 0px`, threshold: 0 }
+        );
+      }
+      tileRevealCallbacks.set(el, onReveal);
+      tileRevealObserver.observe(el);
+    }
+
+    const HOVER_OPACITY = 0.41;
+    const HOVER_OPACITY_MS = 50;
+    const TYPEWRITER_CHAR_MS = 4;
+
+    const MAGNET_SCALE = 1.4;
+    const MAGNET_CLUSTER_RADIUS = 70;
+
+    const DEFAULT_AR = 1460 / 1122;
+
+    const CONTENT_FRAC = {};
+    const CONTENT_FRAC_Y = {};
+
+    const CARD_CAPTION_GAP = 2;
+    const CARD_CAPTION_LINE_H = 20;
+
+    function computeImage(card) {
+      if (card.coverTop) {
+        const captionTop = card.h + CARD_CAPTION_GAP;
+        return { iw: card.w, ih: card.h, offsetX: 0, captionTop, renderedH: Math.max(card.h, captionTop + CARD_CAPTION_LINE_H) };
+      }
+      const ar = card.ar || DEFAULT_AR;
+      let iw = card.w;
+      let ih = iw / ar;
+      const maxH = card.h - (CARD_CAPTION_GAP + CARD_CAPTION_LINE_H);
+      if (ih > maxH) {
+        ih = maxH;
+        iw = ih * ar;
+      }
+      const s = card.imgScale || 1;
+      iw *= s;
+      ih *= s;
+      const offsetX = (card.w - iw) / 2;
+      const captionTop = ih + CARD_CAPTION_GAP;
+      const renderedH = Math.max(card.h, captionTop + CARD_CAPTION_LINE_H);
+      return { iw, ih, offsetX, captionTop, renderedH };
+    }
+
+    // Artwork images are Figma-exported assets (valid ~7 days from generation).
+    // Run `mcp__plugin_figma_figma__download_assets` to fetch them locally.
+    const CARDS = [
+      // Row 1 — y≈495
+      {
+        id: "flavin-untitled", x: 24, y: 495, w: 820, h: 647,
+        ar: 820 / 630,
+        image: "public/refrence/גריין/בלי כותרת (לבוב ופט רום).webp",
+        title: "בלי כותרת (לבוב ופט רום)",
+        subtitle: "דן פלווין, 1969-1970",
+        description: "בשנות ה-60 היה דן פְלווין, כמו אמני מינימליזם אחרים,\nשותף לגישה האנליטית לאמנות...",
+        descWidthFrac: 0.72, descOffsetX: 20, descOffsetY: -5,
+        eagerLoad: true,
+      },
+      {
+        id: "feininger-barns", x: 844, y: 495, w: 447, h: 366,
+        ar: 435 / 334,
+        image: "public/refrence/גריין/אסמים בלילה.webp",
+        title: "אסמים בלילה",
+        subtitle: "ליונל פיינינגר, 1930",
+        description: "פיינינגר היה מן המאסטרים הראשונים בבאוהאוס.\nמ-1919 (בוויימאר ואחר כך בדסאו), עמד בראש סדנת ההדפס...",
+        descWidthFrac: 1.0, descOffsetX: -15, descOffsetY: -5,
+        eagerLoad: true,
+      },
+      {
+        id: "duchamp-widow", x: 1294, y: 495, w: 403, h: 615,
+        ar: 632 / 929,
+        image: "public/refrence/גריין/אלמנה טרייה (crop).webp",
+        title: "אלמנה טרייה",
+        subtitle: "מרסל דושאן, 1920 / עותק ממהדורת 1964",
+        description: "״אלמנה טריה״ (Fresh Widow), 1920, של מרסל דושאן היא דגם מוקטן של חלון צרפתי...",
+        descWidthFrac: 0.75, descOffsetX: 20, descOffsetY: -5,
+        eagerLoad: true,
+      },
+      // Row 2 — y≈1154
+      {
+        id: "motherwell-guillotine", x: 247, y: 1142, w: 598, h: 798,
+        ar: 960 / 1122,
+        image: "public/refrence/גריין/גליוטינה (crop).webp",
+        title: "גליוטינה",
+        subtitle: "רוברט מות׳וול, 1966",
+        description: "הצייר ואיש האקדמיה רוברט מָדֶ״רוֶול היה דובר תנועת האקספרסיוניזם המופשט וממוביליה...",
+        descWidthFrac: 0.75, descOffsetX: -20, descOffsetY: -5,
+        capInsetL: 22, capInsetR: 35,
+      },
+      {
+        id: "building-model", x: 790, y: 1154, w: 460, h: 379,
+        ar: 1460 / 1122,
+        image: "public/refrence/גריין/דגם מבנה.webp",
+        title: "דגם מבנה",
+        subtitle: "ללא שם, 2600-3000 לפנה״ס",
+        description: "ממצא נדיר זה, דגם בית, חושף לעינינו את צורת בתי המגורים בערד: מבנה קובייתי חד-קומתי...",
+        descWidthFrac: 0.75, descOffsetX: -10, descOffsetY: -5,
+        capInsetL: 22, capInsetR: 22,
+      },
+      {
+        id: "calf-temple", x: 1228, y: 1154, w: 451, h: 605,
+        ar: 245 / 311,
+        image: "public/refrence/גריין/העגל והיכלו.webp",
+        title: "העגל והיכלו",
+        subtitle: "ללא שם, המאה ה-16 לפנה״ס",
+        description: "״העגל והיכלו״ הוא ממצא מאשקלון מן התקופה הברונזה התיכונה, המאה ה-16 לפנה״ס...",
+        descWidthFrac: 0.75, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 3 — y≈1762
+      {
+        id: "gross-window", x: 1065, y: 1762, w: 354, h: 737,
+        ar: 349 / 718,
+        image: "public/refrence/גריין/חלון גג בירושלים.webp",
+        title: "חלון גג בירושלים",
+        subtitle: "מיכאל גרוס, 1966-1967",
+        description: "מיכאל גרוס (1920–2004) היה צייר ופסל ישראלי, בן למשפחה גלילית ותיקה...",
+        descWidthFrac: 0.80, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 4 — y≈2234
+      {
+        id: "albers-homage", x: 167, y: 2234, w: 897, h: 901,
+        ar: 439 / 431,
+        image: "public/refrence/גריין/מחווה לריבוע מס 853.webp",
+        title: "מחווה לריבוע מס׳ 853",
+        subtitle: "יוזף אלברס, 1967",
+        description: "יוזף אלברס (1888–1976) היה מן הדמויות\nהמשפיעות במודרניזם...",
+        descWidthFrac: 0.75, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 5 — y≈2755
+      {
+        id: "turrell-space", x: 1070, y: 2755, w: 451, h: 492,
+        ar: 451 / 473,
+        image: "public/refrence/גריין/החלל הרואה.webp",
+        title: "החלל הרואה",
+        subtitle: "ג׳יימס טורל, 1992",
+        description: "״החלל הרואה״ שייך לסדרה חללי שמים שראשיתה בשלהי שנות ה-60...",
+        descWidthFrac: 0.75, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 6 — y≈3138–3250
+      {
+        id: "evans-church", x: 160, y: 3138, w: 358, h: 454,
+        ar: 351 / 432,
+        image: "public/images/collections/כנסיית עץ, קרוליינה הדרומית.webp",
+        title: "כנסיית עץ, קרוליינה הדרומית",
+        subtitle: "ווקר אוונס, 1936",
+        description: "״כנסיית עץ, קרוליינה הדרומית״ של ווקר אוונס היא צילום שחור-לבן חזיתי של כנסייה כפרית צנועה מקרשי עץ...",
+        descWidthFrac: 0.75, descOffsetX: 20, descOffsetY: -5,
+      },
+      {
+        id: "sage-sky", x: 1070, y: 3250, w: 626, h: 520,
+        ar: 613 / 501,
+        image: "public/refrence/גריין/הצד העליון של השמיים.webp",
+        title: "הצד העליון של השמיים",
+        subtitle: "קיי סייג׳, 1944",
+        description: "״הצד העליון של השמים״ (1944) של קיי סייג' הוא\nנוף חלומי סוריאליסטי...",
+        descWidthFrac: 0.75, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 7 — y≈3595–3775
+      {
+        id: "shahn-shelter", x: 208, y: 3595, w: 618, h: 491,
+        ar: 1460 / 1122,
+        coverTop: true,
+        image: "public/refrence/גריין/מחסה ארגעי למהגרי עבודה בארקסנו.webp",
+        title: "מחסה ארעי למהגרי עבודה בארקנסו",
+        subtitle: "בן שאן, 1935",
+        description: "״מחסה ארעי למהגרי עבודה בארקנסו״ של בן שאן הוא צילום דוקומנטרי שחור-לבן\nשל מבנה מאולתר מקרשים, פחים וסמרטוטים הנתמך במוטות...",
+        descWidthFrac: 0.95, descOffsetX: 20, descOffsetY: -5,
+      },
+      {
+        id: "manray-lovers", x: 829, y: 3767, w: 619, h: 262,
+        ar: 598 / 242,
+        coverTop: true,
+        rotateImage: -90,
+        capDY: -6,
+        image: "public/refrence/גריין/הנאהבים.webp",
+        title: "שעת מצפה – הנאהבים",
+        titleNoWrap: true,
+        subtitle: "מאן ריי, 1964",
+        description: "״שעת המצפה — הנאהבים״ של מן ריי הוא דימוי סוריאליסטי איקוני: זוג שפתיים אדומות ענקיות...",
+        descWidthFrac: 0.72, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 8 — y≈4041–4110
+      {
+        id: "ribera-bartholomew", x: 829, y: 4041, w: 875, h: 766,
+        ar: 246 / 220,
+        image: "public/refrence/גריין/ברתולומאו הקדוש.webp",
+        title: "עינויי ברתולומאו הקדוש",
+        subtitle: "ג׳וזפה דה ריברה, 1618",
+        description: "ג'וֹזֶפֶּה דֶה ריבֶּרה, אבי ציור הבארוק הספרדי ומי שהשפיע על יצירותיהם\nשל וֶלַסְקֶס, זוּרְבָּרָן ומוּריוֹ, נדד בעשור השני של המאה ה-17 ברחבי איטליה...",
+        descWidthFrac: 0.65, descOffsetX: -125, descOffsetY: -5,
+        capInsetR: 135,
+        capInsetL: 137,
+      },
+      {
+        id: "christo-storefront", x: 161, y: 4110, w: 262, h: 383,
+        ar: 258 / 321,
+        image: "public/refrence/גריין/חזית חנות.webp",
+        title: "חזית חנות",
+        subtitle: "כריסטו יוואצ׳ף, 1964-1965",
+        description: "״חזית חנות״ של כריסטו הוא רישום-קולאז' (עם בד ושרטוטי מידות) לאחת מ\"חזיתות החנות\" שלו...",
+        descWidthFrac: 0.80, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 9 — y≈4454
+      {
+        id: "atget-hotel", x: 92, y: 4454, w: 515, h: 682,
+        ar: 442 / 662,
+        image: "public/refrence/גריין/רחוב סגייה 16.webp",
+        title: "מלון ד׳ארגוז׳, רחוב סגייה 16",
+        subtitle: "אז׳ן אטז׳ה, 1900",
+        description: "אז׳ן אטז׳ה (1857–1927) תיעד באלפי צילומים את פריז הישנה ההולכת ונעלמת — רחובות, חצרות, חזיתות ופרטי אדריכלות...",
+        descWidthFrac: 0.76, descOffsetX: 20, descOffsetY: -5,
+      },
+      // Row 10 — y≈4810
+      {
+        id: "hazor-gate", x: 552, y: 4810, w: 869, h: 642,
+        ar: 1460 / 1122,
+        coverTop: true,
+        image: "public/refrence/גריין/שער מצודה ממלכתי.webp",
+        title: "שער מצודה מלכותית",
+        subtitle: "ללא שם, המאה ה-9 לפנה״ס",
+        description: "זוהי המחצית הימנית של שער כפול שהיה קבוע בכניסה למצודת חצור בימי המלך אחאב. הוא בנוי אבני גזית מסותתות...",
+        descWidthFrac: 0.55, descOffsetX: 0, descOffsetY: -5,
+        capInsetL: 15, capInsetR: 15,
+      },
+      // Row 11 — y≈5474
+      {
+        id: "jaffa-gate", x: 1267, y: 5474, w: 437, h: 414,
+        ar: 416 / 395,
+        image: "public/refrence/גריין/שער יפו.webp",
+        title: "שער יפו",
+        subtitle: "לואי דה קלארק, 1859",
+        description: "לואי דהה קלרק, צלם צרפתי צעיר, הצטרף ב-1859 למשלחת לטירות הצלבנים בסוריה, ובהמשך המשיך לבדו לצלם אתרים היסטוריים...",
+        descWidthFrac: 0.78, descOffsetX: 20, descOffsetY: -5,
+      },
+    ];
+
+    const LAID_OUT_CARDS = CARDS.map((card) => ({
+      ...card,
+      renderedH: computeImage(card).renderedH,
+    }));
+
+    // Footer positions match the Figma frame (6490px total canvas height).
+    const FOOTER_LINKS_TOP = 6028;
+    const FOOTER_PARAGRAPH_TOP = 5980;
+    const FOOTER_WORDMARK_TOP = 6103;
+    const CANVAS_H = 6313;
+
+    function Card({ card, hoverFilter }) {
+      const { iw, ih, offsetX, captionTop } = computeImage(card);
+      const [loaded, setLoaded] = useState(false);
+      const [revealed, setRevealed] = useState(false);
+      const [hovered, setHovered] = useState(false);
+      const [settled, setSettled] = useState(false);
+      const wrapperRef = useRef(null);
+
+      useEffect(() => {
+        const el = wrapperRef.current;
+        if (!el) return;
+        scheduleTileReveal(el, () => setRevealed(true));
+      }, []);
+
+      const hoverFilterGroup = FILTER_MATCHES[hoverFilter];
+      const isHoverMagnetTarget = !!hoverFilterGroup && hoverFilterGroup.includes(card.id);
+      const hoverFilterDimmed = !!hoverFilter && !isHoverMagnetTarget;
+
+      useEffect(() => {
+        if (!isHoverMagnetTarget) return;
+        setRevealed(true);
+        setSettled(true);
+      }, [isHoverMagnetTarget]);
+
+      const [typedLength, setTypedLength] = useState(0);
+      useEffect(() => {
+        if (!card.description) return;
+        const typingIn = hovered;
+        const id = setInterval(() => {
+          setTypedLength((n) => {
+            const done = typingIn ? n >= card.description.length : n <= 0;
+            if (done) {
+              clearInterval(id);
+              return n;
+            }
+            return typingIn ? n + 1 : n - 1;
+          });
+        }, TYPEWRITER_CHAR_MS);
+        return () => clearInterval(id);
+      }, [hovered]);
+
+      const isRevealed = loaded && revealed;
+      useEffect(() => {
+        if (!isRevealed) return;
+        const id = setTimeout(() => setSettled(true), TILE_FADE_MS);
+        return () => clearTimeout(id);
+      }, [isRevealed]);
+
+      const [lf, rf] = CONTENT_FRAC[card.image.split("/").pop()] || [0, 1];
+      const artLeft = offsetX + lf * iw;
+      const artRight = offsetX + rf * iw;
+      const [tf, bf] = CONTENT_FRAC_Y[card.image.split("/").pop()] || [0, 1];
+      const artTop = tf * ih;
+      const artBottom = bf * ih;
+
+      const [hoverMagnetTransform, setHoverMagnetTransform] = useState(null);
+      useEffect(() => {
+        if (!isHoverMagnetTarget) {
+          setHoverMagnetTransform(null);
+          return;
+        }
+        const el = wrapperRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const scale = rect.width / card.w;
+        const cx = rect.left + ((artLeft + artRight) / 2) * scale;
+        const cy = rect.top + ((artTop + artBottom) / 2) * scale;
+        const idx = hoverFilterGroup.indexOf(card.id);
+        const angle = (idx / hoverFilterGroup.length) * Math.PI * 2;
+        const targetX = window.innerWidth / 2 + Math.cos(angle) * MAGNET_CLUSTER_RADIUS;
+        const targetY = window.innerHeight / 2 + Math.sin(angle) * MAGNET_CLUSTER_RADIUS;
+        setHoverMagnetTransform({ x: targetX - cx, y: targetY - cy, scale: MAGNET_SCALE });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [isHoverMagnetTarget]);
+
+      const descTop = artTop + (card.descOffsetY || 0);
+      const descWidthFrac = card.descWidthFrac !== undefined ? card.descWidthFrac : 0.52;
+      const descOffsetX = card.descOffsetX || 0;
+      const capLeft = Math.max(artLeft, -card.x) + (card.capInsetL || 0);
+      const capWidth = Math.min(artRight, FRAME_W - card.x) - capLeft - (card.capInsetR || 0);
+
+      return (
+        <div
+          id={"card-" + card.id}
+          ref={wrapperRef}
+          data-tile-x={card.x}
+          className="absolute"
+          style={{
+            left: scalePx(card.x),
+            top: scalePx(card.y),
+            width: scalePx(card.w),
+            transform: hoverMagnetTransform
+              ? `translate(${hoverMagnetTransform.x}px, ${hoverMagnetTransform.y}px) scale(${hoverMagnetTransform.scale})`
+              : "none",
+            zIndex: isHoverMagnetTarget ? 20 : undefined,
+            opacity: hoverFilterDimmed ? 0.15 : 1,
+            transition: "transform 220ms cubic-bezier(0.65, 0, 0.35, 1), opacity 300ms ease",
+          }}
+        >
+          {card.rotateImage ? (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: scalePx(offsetX),
+                top: 0,
+                width: scalePx(iw),
+                height: scalePx(ih),
+                overflow: "hidden",
+                opacity: !isRevealed ? 0 : hovered ? (card.hoverImage ? 0 : HOVER_OPACITY) : 1,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            >
+              <img
+                src={card.image}
+                alt={card.title}
+                loading={card.eagerLoad ? "eager" : "lazy"}
+                fetchPriority={card.eagerLoad ? "high" : undefined}
+                decoding="async"
+                onLoad={() => setLoaded(true)}
+                style={{
+                  position: "absolute",
+                  width: scalePx(ih),
+                  height: scalePx(iw),
+                  left: "50%",
+                  top: "50%",
+                  transform: `translate(-50%, -50%) rotate(${card.rotateImage}deg)`,
+                  objectFit: "cover",
+                  objectPosition: "center",
+                }}
+              />
+            </div>
+          ) : (
+            <img
+              src={card.image}
+              alt={card.title}
+              loading={card.eagerLoad ? "eager" : "lazy"}
+              fetchPriority={card.eagerLoad ? "high" : undefined}
+              decoding="async"
+              onLoad={() => setLoaded(true)}
+              className="absolute pointer-events-none"
+              style={{
+                left: scalePx(offsetX),
+                top: 0,
+                width: scalePx(iw),
+                height: scalePx(ih),
+                objectFit: card.coverTop ? "cover" : "cover",
+                objectPosition: "center",
+                opacity: !isRevealed ? 0 : hovered ? (card.hoverImage ? 0 : HOVER_OPACITY) : 1,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            />
+          )}
+          {card.hoverImage && (
+            <img
+              src={card.hoverImage}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              decoding="async"
+              className="absolute pointer-events-none"
+              style={{
+                left: scalePx(offsetX),
+                top: 0,
+                width: scalePx(iw),
+                height: scalePx(ih),
+                objectFit: "cover",
+                objectPosition: "center",
+                opacity: isRevealed && hovered ? HOVER_OPACITY : 0,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            />
+          )}
+          {/* Doubles as the link to the work's own page. Rendering an <a>
+              with no href when the work has no inner page yet degrades to a
+              plain box — no pointer cursor, not focusable. */}
+          <a
+            href={(window.ARTWORK_HREF || {})[card.id]}
+            className="absolute pointer-events-auto"
+            style={{ left: scalePx(artLeft), top: scalePx(artTop), width: scalePx(artRight - artLeft), height: scalePx(artBottom - artTop) }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+          />
+          {card.description && (
+            <div
+              className="absolute overflow-hidden pointer-events-none text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(Math.max(artLeft + 14, artRight - 14 - (artRight - artLeft) * descWidthFrac) + descOffsetX),
+                top: scalePx(descTop + 12),
+                width: scalePx((artRight - artLeft) * descWidthFrac - 14),
+                height: scalePx(Math.max(0, (artBottom - descTop) * 0.8)),
+                fontFamily: FONT_THEBASICS,
+                fontWeight: 500,
+                fontSize: scalePx(16),
+                lineHeight: 1.28,
+                letterSpacing: "-0.01em",
+                color: "#28282a",
+                opacity: isRevealed && (hovered || typedLength > 0) ? 1 : 0,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            >
+              {card.description.slice(0, typedLength).split('\n').map((line, i) => (
+                <React.Fragment key={i}>{i > 0 && <br/>}{line}</React.Fragment>
+              ))}
+            </div>
+          )}
+          <div
+            className="absolute"
+            dir="rtl"
+            style={{
+              left: scalePx(capLeft),
+              top: scalePx(captionTop + (card.capDY || 0)),
+              width: scalePx(capWidth),
+              zIndex: 1,
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              fontSize: scalePx(16),
+              lineHeight: scalePx(17),
+              opacity: hoverFilter ? 0 : 1,
+              transition: "opacity 180ms ease",
+            }}
+          >
+            <div className="flex justify-between">
+              {card.titleNoWrap
+                ? <span style={{whiteSpace:"nowrap"}}><HoverWord label={card.title} active={hovered} /></span>
+                : <HoverWord label={card.title} active={hovered} />}
+              <span style={{whiteSpace: "nowrap"}}>
+                <HoverWord label={card.subtitle} active={hovered} />
+              </span>
+            </div>
+            {card.titleLine2 && (
+              <div><HoverWord label={card.titleLine2} active={hovered} /></div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [pageFadeIn, setPageFadeIn] = useState(false);
+      useEffect(() => {
+        const id = setTimeout(() => setPageFadeIn(true), 60);
+        return () => clearTimeout(id);
+      }, []);
+      const [hoverFilter, setHoverFilter] = useState(null);
+      const [searchOpen, setSearchOpen] = useState(false);
+
+      return (
+        <div className="min-h-screen w-full bg-[#fffdfa] relative" dir="rtl">
+          <div id="cg-header-overlay" className="fixed inset-x-0 top-0 z-30 flex justify-center pointer-events-none">
+            <div className={"relative " + CANVAS_W}>
+              <div className="absolute pointer-events-auto" style={{ insetInlineEnd: scalePx(24), top: scalePx(32) }}>
+                <TopNav onSearchToggle={() => setSearchOpen((v) => !v)} />
+              </div>
+              <div className="absolute pointer-events-auto" style={{ left: scalePx(614), top: scalePx(19) }}>
+                <MotifTagRow />
+              </div>
+              <HeaderWordmarkLink style={{ right: scalePx(24), top: scalePx(31), width: scalePx(247), height: scalePx(25) }} />
+              <div className="absolute" style={{ right: scalePx(24), top: scalePx(189) }}>
+                <FilterMenu
+                  highlightedFilters={[]}
+                  onFilterHover={(opt) => setHoverFilter(opt)}
+                  onSelectFilter={() => {}}
+                  onClear={() => setHoverFilter(null)}
+                />
+              </div>
+              <SearchBar open={searchOpen} onClose={() => setSearchOpen(false)} />
+            </div>
+          </div>
+
+          <div
+            id="cg-canvas"
+            className={"relative mx-auto " + CANVAS_W}
+            style={{
+              height: scalePx(CANVAS_H),
+              overflow: "clip",
+              opacity: pageFadeIn ? 1 : 0,
+              transition: "opacity 500ms ease",
+              marginTop: scalePx(10),
+            }}
+          >
+            {/* Small window thumbnail — matches Figma node 1620:1704 "window_1 2" */}
+            <div
+              id="cg-window-video"
+              className="absolute overflow-hidden"
+              style={{ left: scalePx(1038), top: scalePx(189), width: scalePx(74), height: scalePx(96) }}
+            >
+              <video src="public/videos/window_1.mp4" autoPlay loop muted playsInline className="w-full h-full object-cover" />
+            </div>
+
+            <p
+              id="cg-description"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(372),
+                top: scalePx(183),
+                width: scalePx(655),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                lineHeight: 1.21,
+                letterSpacing: "-0.2px",
+              }}
+            >
+              השער משמש כסַף — נקודת מעבר בין מצבים ובין מרחבים. באמנות ובארכיטקטורה הוא מופיע כשער ניצחון, כשער עיר, וכפתח שמסמן את המעבר אל הקדוש. מטרת השער היא למסגר את מה שנמצא מעברה ומכוונת אליו את המבט.
+            </p>
+
+            {LAID_OUT_CARDS.map((card) => (
+              <Card
+                key={card.id}
+                card={card}
+                hoverFilter={hoverFilter}
+              />
+            ))}
+
+            <div
+              id="cg-footer-about"
+              className="absolute"
+              style={{
+                left: scalePx(167),
+                top: scalePx(FOOTER_LINKS_TOP),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+              }}
+            >
+              <NavLink label="אודות" href="about.html" />
+            </div>
+            <div
+              id="cg-footer-contact"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(-128),
+                top: scalePx(FOOTER_LINKS_TOP),
+                width: scalePx(240),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+              }}
+            >
+              <NavLink label="יצירת קשר" href="#contact" />
+            </div>
+            <p
+              id="cg-footer-paragraph"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                right: scalePx(23),
+                top: scalePx(FOOTER_PARAGRAPH_TOP),
+                width: scalePx(875),
+                fontWeight: 500,
+                fontSize: scalePx(20),
+                lineHeight: 1.21,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              <span style={{ fontFamily: FONT_MASADA }}>אוספי מוזיאון ישראל</span>
+              <span style={{ fontFamily: FONT_THEBASICS }}> מונים כ-500 אלף פריטים המשתרעים על כל קשת התרבות החומרית, מהפרהיסטוריה ועד ימינו. האוסף מאורגן בשלושה אגפים מרכזיים — ארכאולוגיה, אמנות, ואמנות יהודית — וכולל את האחזקות הגדולות בעולם של ארכאולוגיה מקראית וארץ-ישראלית, לצד אמנות יפה, צילום, עיצוב, אתנוגרפיה וחפצי פולחן.</span>
+            </p>
+            <AnimatedFooterWordmark
+              id="cg-footer-wordmark"
+              style={{
+                left: scalePx(30),
+                top: scalePx(FOOTER_WORDMARK_TOP),
+                width: scalePx(1675),
+                height: scalePx(170),
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

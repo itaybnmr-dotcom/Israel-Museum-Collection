@@ -1,0 +1,2 @@
+# MCP Extraction Prompts
+

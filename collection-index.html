@@ -1,0 +1,1763 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>אוספי מוזיאון ישראל</title>
+  <meta name="description" content="אינדקס מלא של יצירות אוספי מוזיאון ישראל, לפי שם, יוצר.ת וטכניקה." />
+  <link rel="icon" type="image/svg+xml" href="public/images/favicon.svg" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="artworks-data.js"></script>
+  <script src="search-engine.js"></script>
+  <style>
+    @view-transition {
+      navigation: auto;
+    }
+    ::view-transition-group(root) {
+      animation-duration: 0.42s;
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      mix-blend-mode: normal;
+    }
+    /* The nav bar carries a persistent view-transition-name (site-header) so
+       it morphs instead of cross-fading — but the browser still runs its
+       default old/new fade *underneath* that morph, and since the two
+       snapshots are almost-but-not-quite pixel-identical (font hinting,
+       subpixel rounding) that reads as a flicker. Freezing it removes that. */
+    ::view-transition-old(site-header),
+    ::view-transition-new(site-header) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+    /* Also freeze the group's own position/size interpolation — otherwise
+       even a 1px geometry mismatch between two pages' headers (they're
+       hand-tuned per page) makes it visibly slide during the crossfade. */
+    ::view-transition-group(site-header) {
+      animation: none;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Bold.otf') format('opentype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Masada';
+      src: url('public/fonts/Masada-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html, body {
+      background-color: #fffdfa;
+      color: #28282a;
+      font-family: 'TheBasics', 'Segoe UI', Arial, sans-serif;
+      font-weight: 500;
+      overflow-x: hidden;
+      max-width: 100%;
+    }
+
+    ::selection {
+      background-color: #28282a;
+      color: #fffdfa;
+    }
+  </style>
+  <style>
+    #tile-idx100 { border: none !important; box-shadow: none !important; outline: none !important; }
+    #tile-idx100 img { border: none !important; box-shadow: none !important; outline: none !important; filter: none !important; }
+    #tile-idx100::before, #tile-idx100::after { display: none !important; }
+    #tile-idx100 img::before, #tile-idx100 img::after { display: none !important; }
+
+    .caption-container-row {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: flex-start !important;
+      direction: rtl !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .caption-title-side {
+      text-align: right !important;
+      flex-shrink: 0 !important;
+      max-width: 55% !important;
+      word-break: keep-all !important;
+      white-space: normal !important;
+    }
+    .caption-metadata-side {
+      text-align: left !important;
+      flex-grow: 1 !important;
+      min-width: 0 !important;
+      max-width: 70% !important;
+      word-break: keep-all !important;
+      white-space: normal !important;
+    }
+    .caption-metadata-side span.date-string {
+      white-space: nowrap !important;
+    }
+
+    /* idx30 "הצד העליון של השמים": natural title width 122px = 56.7% of 215px container.
+       Global 55% cap = 118px causes a 4px shortfall → 2-line wrap.
+       57% = 122.6px gives just enough room; subtitle "קיי סייג׳, 1944" = 77px < 42% = 90px ✓ */
+    #tile-idx30 .caption-title-side { max-width: 58% !important; }
+
+    /* idx19 "ללא שם, המאה ה‑11 לפנה״ס": Figma gives subtitle 75.8% (188px).
+       Global 70% = 145px is exactly the natural text width → rounding causes 2-line wrap.
+       76% gives 157px, comfortably fitting the text on 1 line. */
+    #tile-idx19 .caption-metadata-side { max-width: 76% !important; }
+
+    /* idx47: title "כד גלילי לגבינה מיובאת ממצרים" at global 55% = 113px squeezes
+       subtitle to 45% = 93px → 3-line wrap. Reducing title to 45% gives subtitle
+       55% = 113px → 2 lines ("ללא שם, 3,500‑5000" / "לפנה״ס"), matching Figma. */
+    #tile-idx47 .caption-title-side { max-width: 45% !important; }
+
+    /* idx36 "חזית חנות": subtitle "כריסטו יאווצ׳ף, 1964‑1965" natural = 142px, fits on 1 line.
+       Capping at 42% = 87.8px forces "1964‑1965" (64px) to wrap as its own left-aligned line. */
+    #tile-idx36 .caption-metadata-side { max-width: 42% !important; }
+
+    /* idx12 "אתלטיקה קלה": subtitle "ליזלוטה גרבז׳ינה, 1930" at 1280px viewport.
+       52% = 95px fits "ליזלוטה גרבז׳ינה," on line 1; "1930" wraps to line 2. */
+    #tile-idx12 .caption-metadata-side { max-width: 52% !important; }
+
+    /* idx13 "בלי כותרת (לבוב ופט רום)": global 55% title cap (113px) leaves only
+       93px for subtitle "דן פלווין, 1969‑1970" (natural 109px) → 2-line wrap.
+       Figma title box is 42.9% (106px). Setting 45% gives subtitle 55% = 113px > 109px ✓ */
+    #tile-idx13 .caption-title-side { max-width: 45% !important; }
+
+    /* idx58 "לוחית המתארת את האלים ננה ונינגל": natural title width 198px = 56.3% of 352px.
+       Global 55% cap (194px) is 5px short → 2-line wrap. 57% = 201px gives 3px breathing room. */
+    #tile-idx58 .caption-title-side { max-width: 57% !important; white-space: nowrap !important; }
+
+    /* idx54 "כרזה לסרט ״אקסודוס״": natural title width 122px = 55.9% of 218px container.
+       Global 55% cap (120px) is 2px short → 2-line wrap. 57% = 124px gives 2px breathing room. */
+    #tile-idx54 .caption-title-side { max-width: 57% !important; white-space: nowrap !important; }
+
+    /* idx91 "צלחת גדולה ועליה מגולפים סמלים": Figma title box is 66.2% (258px), H=15 (1 line).
+       Global 55% cap (180px) < natural title width (186px) → 2-line wrap.
+       58% = 189px gives 3px breathing room; subtitle "המאה ה-4 לפנה״ס" gets 42% = 137px ✓ */
+    #tile-idx91 .caption-title-side { max-width: 58% !important; }
+
+    /* idx94 "שבר שפה של קערת זכוכית פסיפס": Figma title box is 62.8% (223px), H=14 (1 line).
+       Global 55% cap (163px) < natural title width (179px) → 2-line wrap.
+       62% = 184px gives 5px breathing room; subtitle "המאה ה-1 לספירה" gets 38% = 112px ✓ */
+    #tile-idx94 .caption-title-side { max-width: 62% !important; white-space: nowrap !important; }
+
+    /* idx69 "מחסה ארעי למהגרי עבודה בארקנסו": title natural width = 55.1% of container,
+       just over the 55% global cap → wraps. 57% gives 2% breathing room; nowrap keeps
+       the subtitle "בן שאן, 1935" on one line even if container is slightly tight. */
+    #tile-idx69 .caption-title-side { max-width: 61% !important; white-space: nowrap !important; }
+    #tile-idx69 .caption-metadata-side { white-space: nowrap !important; }
+
+    /* Cursor-proximity speed: JS sets --hover-speed on each tile; !important overrides
+       the transition-duration from React's inline `transition` shorthand. */
+    [id^="tile-idx"] img { transition-duration: var(--hover-speed, 50ms) !important; }
+
+    .artwork-cluster-img,
+    .artwork-cluster-img img {
+      background: none !important;
+      background-color: transparent !important;
+      border: none !important;
+      border-color: transparent !important;
+      outline: none !important;
+      box-shadow: none !important;
+      filter: none !important;
+    }
+
+    /* List-view dimension column: uniform ltr left-aligned nowrap for all rows */
+    .list-dim-cell {
+      direction: ltr !important;
+      text-align: left !important;
+      white-space: nowrap !important;
+      padding-right: 0 !important;
+      margin-right: 0 !important;
+    }
+    .list-dim-cell > span.relative {
+      margin-left: 0 !important;
+      display: inline-block !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Static, JS-free header: React/ReactDOM/Babel-standalone all load from a
+       CDN and the whole page script has to be parsed and transpiled before
+       React paints anything, so on every navigation there's a real gap where
+       the document is blank and the nav bar vanishes. This markup needs no
+       JS at all, so it paints on the very first frame and carries the
+       site-header view-transition name itself (the React-rendered header
+       below no longer claims it — a name can only be claimed by one element
+       at a time). It sits one z-index below the real header and is never
+       removed; once React mounts, its own header simply covers this one, so
+       there's no visible swap — as long as both agree on exact geometry
+       (right/top/width/height/gap below), which is why those are hardcoded
+       to match every page's own HeaderWordmarkLink/TopNav values exactly
+       rather than copy-pasted loosely. -->
+  <div style="position:fixed;inset-inline:0;top:0;z-index:29;display:flex;justify-content:center;pointer-events:none;view-transition-name:site-header;">
+    <div dir="rtl" style="position:relative;width:min(1728px,100vw);">
+      <a href="index.html" style="position:absolute;right:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.017940);width:calc(min(1728px,100vw) * 0.142940);height:calc(min(1728px,100vw) * 0.014468);pointer-events:auto;display:block;">
+        <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style="width:100%;height:100%;display:block;" />
+      </a>
+      <nav dir="rtl" style="position:absolute;inset-inline-end:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.018519);display:flex;align-items:center;gap:20px;pointer-events:auto;font-family:'TheBasics','Segoe UI',Arial,sans-serif;font-weight:500;font-size:calc(min(1728px,100vw) * 0.011574);letter-spacing:0.2px;">
+        <a href="index.html#about" style="color:#28282a;text-decoration:none;">אסופות</a>
+        <a href="collection-index.html" style="color:#28282a;text-decoration:none;">אינדקס</a>
+        <a href="search.html" style="color:#28282a;text-decoration:none;">חיפוש</a>
+        <a href="about.html" style="color:#28282a;text-decoration:none;">אודות</a>
+      </nav>
+    </div>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useRef, useEffect, useCallback } = React;
+
+    const FONT_THEBASICS = "TheBasics, \"Segoe UI\", Arial, sans-serif";
+    const FONT_MASADA = "Masada, \"Segoe UI\", Arial, sans-serif";
+
+    const TILE_FADE_MS = 500;
+
+    // Same footer wordmark mechanism as collection-circle.html (see its own
+    // comment) — public/images/wordmark-blank.svg has the two icon-slot
+    // shapes removed so real <img> glyphs can be cycled over them.
+    const HERO_VIDEOS = [
+      "public/videos/circle_1.mp4",
+      "public/videos/vertical_landscape.mp4",
+      "public/videos/window_1.mp4",
+      "public/videos/motion.mp4",
+      "public/videos/shard_1.mp4",
+    ];
+
+    const WORDMARK_HOVER_FADE_MS = 200;
+
+    // Small header wordmark: same hover-plays-hero-reel / click-returns-home
+    // behavior as collection-circle.html's own HeaderWordmarkLink.
+    function HeaderWordmarkLink({ style }) {
+      const [video, setVideo] = useState(null);
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (video) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          closeTimer.current = setTimeout(() => setMounted(false), WORDMARK_HOVER_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [video]);
+
+      return (
+        <a
+          href="index.html"
+          className="absolute pointer-events-auto"
+          style={{ ...style, zIndex: 41 }}
+          onMouseEnter={() => setVideo(HERO_VIDEOS[Math.floor(Math.random() * HERO_VIDEOS.length)])}
+          onMouseLeave={() => setVideo(null)}
+          onClick={() => {
+            if (video) sessionStorage.setItem("heroVideo", video);
+          }}
+        >
+          <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%", display: "block", position: "relative", zIndex: 2 }} />
+          {mounted && (
+            <div
+              className="fixed inset-0 overflow-hidden pointer-events-none"
+              style={{ zIndex: 1, opacity: visible ? 1 : 0, transition: `opacity ${WORDMARK_HOVER_FADE_MS}ms ease` }}
+            >
+              <video key={video} src={video} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+            </div>
+          )}
+        </a>
+      );
+    }
+
+    const WORDMARK_ICONS = [
+      "public/images/icon-circle.svg",
+      "public/images/icon-verticality.svg",
+      "public/images/icon-gate.svg",
+      "public/images/icon-motion.svg",
+      "public/images/icon-fragment.svg",
+    ];
+    const WORDMARK_ICON_SLOTS = [
+      { left: 1135.5, top: 30.3, width: 122.4, height: 118.9 },
+      { left: 475.3, top: 30.3, width: 117.4, height: 118.9 },
+    ];
+    const WORDMARK_ICON_INTERVAL_MS = 200;
+
+    function CyclingIcon({ src, style }) {
+      return <img src={src} alt="" aria-hidden="true" style={{ ...style, objectFit: "contain" }} />;
+    }
+
+    function AnimatedFooterWordmark({ style, id }) {
+      const [tick, setTick] = useState(0);
+      useEffect(() => {
+        const id = setInterval(() => setTick((t) => t + 1), WORDMARK_ICON_INTERVAL_MS);
+        return () => clearInterval(id);
+      }, []);
+      return (
+        <div id={id} className="absolute" style={{ ...style, position: "absolute" }}>
+          <img src="public/images/wordmark-blank.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%" }} />
+          {WORDMARK_ICON_SLOTS.map((slot, i) => (
+            <CyclingIcon
+              key={i}
+              src={WORDMARK_ICONS[(tick + i * 2) % WORDMARK_ICONS.length]}
+              style={{ position: "absolute", left: scalePx(slot.left), top: scalePx(slot.top), width: scalePx(slot.width), height: scalePx(slot.height) }}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    const UNDERLINE_OFFSET = "0.08em";
+    const UNDERLINE_THICKNESS = "0.1em";
+
+    // Same 1728px-wide Figma frame / scalePx system as every other page.
+    const FRAME_W = 1728;
+    const scalePx = (px) => `calc(min(${FRAME_W}px, 100vw) * ${(px / FRAME_W).toFixed(6)})`;
+    const CANVAS_W = "w-[1728px] max-w-full";
+
+    // On this page אינדקס is the current section (hardcoded, underlined in
+    // IndexTopNav below) — אסופות is instead a plain link to the home
+    // page's own About section (the collections overview, same target
+    // "אודות" itself points to), matching collection-circle.html's own
+    // אסופות target.
+    const NAV_ITEMS = [
+      { label: "אסופות", href: "index.html#about" },
+      { label: "חיפוש", href: "#search" },
+      { label: "אודות", href: "about.html" },
+    ];
+
+    function NavLink({ label, href, onClick }) {
+      const [visible, setVisible] = useState(false);
+      const [origin, setOrigin] = useState("right");
+      const [resetKey, setResetKey] = useState(0);
+      const rafIds = useRef([]);
+
+      function clearRafs() {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+      }
+      function handleEnter() {
+        // Clicking a focusable link fires onFocus even though the mouse
+        // never left — without this guard that replays the whole closed-
+        // then-sweep-in animation as a visible glitch right at the click.
+        if (visible) return;
+        clearRafs();
+        setOrigin("right");
+        setVisible(false);
+        setResetKey((k) => k + 1);
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+        }));
+      }
+      function handleLeave() {
+        clearRafs();
+        setOrigin("left");
+        setVisible(false);
+      }
+      const clipPath = visible ? "inset(0 0 0 0)" : origin === "right" ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)";
+
+      return (
+        <a
+          href={href}
+          onClick={onClick}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          onFocus={handleEnter}
+          onBlur={handleLeave}
+          className="relative inline-block text-[#28282a]"
+          style={{ textDecoration: "none" }}
+        >
+          {label}
+          <span
+            key={resetKey}
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              color: "transparent",
+              userSelect: "none",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+              clipPath,
+              transition: "clip-path 0.16s ease",
+            }}
+          >
+            {label}
+          </span>
+        </a>
+      );
+    }
+
+    // Same underline-sweep-on-hover as NavLink, but for a controlled sweep
+    // (driven by a Card's own hover state) rather than the span's own mouse
+    // events — used so hovering an artwork's image also sweeps its
+    // caption's underline.
+    function HoverWord({ label, active, style, className }) {
+      const [visible, setVisible] = useState(false);
+      const [origin, setOrigin] = useState("right");
+      const [resetKey, setResetKey] = useState(0);
+      const rafIds = useRef([]);
+
+      function clearRafs() {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+      }
+      function open() {
+        clearRafs();
+        setOrigin("right");
+        setVisible(false);
+        setResetKey((k) => k + 1);
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+        }));
+      }
+      function close() {
+        clearRafs();
+        setOrigin("left");
+        setVisible(false);
+      }
+
+      useEffect(() => {
+        if (active) open(); else close();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [active]);
+
+      const clipPath = visible ? "inset(0 0 0 0)" : origin === "right" ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)";
+
+      return (
+        <span className={"relative inline-block text-[#28282a]" + (className ? " " + className : "")} style={style}>
+          {label}
+          <span
+            key={resetKey}
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              color: "transparent",
+              userSelect: "none",
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+              clipPath,
+              transition: "clip-path 0.16s ease",
+            }}
+          >
+            {label}
+          </span>
+        </span>
+      );
+    }
+
+    // Nav row: אסופות (plain, rightmost) — אינדקס (current, hardcoded
+    // underline) — חיפוש — אודות (leftmost), matching the reference
+    // recording's header exactly (see frame_00 crop: אינדקס is the only
+    // underlined item, sitting between אסופות and חיפוש).
+    function IndexTopNav({ onSearchToggle }) {
+      return (
+        <nav
+          id="ci-nav"
+          className="flex items-center gap-5 pointer-events-auto"
+          dir="rtl"
+          style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(20), letterSpacing: "0.2px" }}
+        >
+          {/* Same skipIntro/scrollToAbout handoff as collection-circle.html's
+              own אסופות link — lands directly on index.html's About section
+              instead of the hero. */}
+          <NavLink
+            label={NAV_ITEMS[0].label}
+            href={NAV_ITEMS[0].href}
+            onClick={() => {
+              sessionStorage.setItem("skipIntro", "1");
+              sessionStorage.setItem("scrollToAbout", "1");
+            }}
+          />
+          <span
+            className="inline-block"
+            style={{
+              textDecorationLine: "underline",
+              textDecorationColor: "#28282a",
+              textDecorationThickness: UNDERLINE_THICKNESS,
+              textUnderlineOffset: UNDERLINE_OFFSET,
+              textDecorationSkipInk: "auto",
+            }}
+          >
+            אינדקס
+          </span>
+          <NavLink
+            label={NAV_ITEMS[1].label}
+            href={NAV_ITEMS[1].href}
+            // "חיפוש" doesn't navigate — it toggles the search bar (see
+            // SearchBar/App). stopPropagation keeps this same click from
+            // also being seen by SearchBar's document-level away-listener,
+            // which would otherwise immediately close what this just opened.
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSearchToggle(); }}
+          />
+          <NavLink label={NAV_ITEMS[2].label} href={NAV_ITEMS[2].href} />
+        </nav>
+      );
+    }
+
+    const SEARCH_FADE_MS = 180;
+    const SEARCH_PLACEHOLDER = "חפש.י לפי אסופה, יצירה או יוצר.ת...";
+    const SEARCH_MAX_RESULTS = 8;
+    const CARET_BLINK_MS = 530;
+
+    // Matching lives in search-engine.js so this dropdown and the full results
+    // page (search.html) can never disagree about what a query means. It
+    // returns the complete list; the dropdown shows the first
+    // SEARCH_MAX_RESULTS and links the rest through to search.html.
+    function searchArtworks(query) {
+      return window.MuseumSearch.run(query).results;
+    }
+
+    function SearchBar({ open, onClose }) {
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const [query, setQuery] = useState("");
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+      const wrapperRef = useRef(null);
+      const inputRef = useRef(null);
+      const allResults = searchArtworks(query);
+      const results = allResults.slice(0, SEARCH_MAX_RESULTS);
+
+      function goToResult(art) {
+        window.location.href = "artwork.html?id=" + art.id;
+      }
+
+      // Fake caret matching the stroke's own weight (scalePx(4)) — the real
+      // <input> keeps native focus/selection/typing, but its own caret is
+      // hidden (caret-color: transparent) since browsers don't expose a way
+      // to make that thin native bar match our 4px line. This bar is
+      // repositioned by measuring the pre-cursor substring on a scratch
+      // canvas (matching the input's own live computed font), same
+      // measure-in-browser technique used throughout this file for text
+      // fitting — cheap enough to run on every keystroke.
+      const [caretOffset, setCaretOffset] = useState(0);
+      const [caretOn, setCaretOn] = useState(true);
+      const [caretFocused, setCaretFocused] = useState(false);
+      const measureCtxRef = useRef(null);
+      const blinkTimerRef = useRef(null);
+
+      function measureCaret() {
+        const el = inputRef.current;
+        if (!el) return;
+        if (!measureCtxRef.current) measureCtxRef.current = document.createElement("canvas").getContext("2d");
+        const cs = getComputedStyle(el);
+        measureCtxRef.current.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+        setCaretOffset(measureCtxRef.current.measureText(el.value.slice(0, pos)).width);
+      }
+
+      function restartBlink() {
+        setCaretOn(true);
+        clearInterval(blinkTimerRef.current);
+        blinkTimerRef.current = setInterval(() => setCaretOn((v) => !v), CARET_BLINK_MS);
+      }
+
+      useEffect(() => {
+        if (!caretFocused) { clearInterval(blinkTimerRef.current); return; }
+        restartBlink();
+        return () => clearInterval(blinkTimerRef.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [caretFocused]);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (open) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          setQuery("");
+          if (inputRef.current) inputRef.current.value = "";
+          closeTimer.current = setTimeout(() => setMounted(false), SEARCH_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [open]);
+
+      useEffect(() => {
+        if (open && visible && inputRef.current) inputRef.current.focus();
+      }, [open, visible]);
+
+      // Click-away and Escape both close it. This listens on "click" (not
+      // "mousedown") specifically so the toggle's own stopPropagation — fired
+      // during the same click event — can suppress it; a mousedown listener
+      // would fire on a different, earlier event and miss that suppression.
+      useEffect(() => {
+        if (!open) return;
+        function onDocClick(e) {
+          if (wrapperRef.current && !wrapperRef.current.contains(e.target)) onClose();
+        }
+        function onKeyDown(e) {
+          if (e.key === "Escape") onClose();
+          if (e.key === "Enter") {
+            // Enter goes to the full results list rather than jumping straight
+            // into the top hit — a query like "אדום" has 27 matches and the
+            // dropdown only ever shows 8 of them.
+            window.location.href = window.MuseumSearch.urlFor(inputRef.current ? inputRef.current.value : "");
+          }
+        }
+        document.addEventListener("click", onDocClick);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+          document.removeEventListener("click", onDocClick);
+          document.removeEventListener("keydown", onKeyDown);
+        };
+      }, [open, onClose]);
+
+      if (!mounted) return null;
+
+      return (
+        <div
+          ref={wrapperRef}
+          className="absolute pointer-events-auto"
+          style={{
+            left: 0,
+            right: 0,
+            top: scalePx(0),
+            height: scalePx(70),
+            zIndex: 50,
+            backgroundColor: "#fffdfa",
+            opacity: visible ? 1 : 0,
+            transition: `opacity ${SEARCH_FADE_MS}ms ease`,
+          }}
+        >
+          <div
+            className="absolute"
+            style={{ left: 0, right: 0, top: scalePx(66), borderBottom: `${scalePx(4)} solid #28282a` }}
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            dir="rtl"
+            placeholder={SEARCH_PLACEHOLDER}
+            className="absolute bg-transparent outline-none text-right placeholder:text-[#28282a]"
+            style={{
+              right: scalePx(15),
+              left: scalePx(15),
+              top: scalePx(10),
+              height: scalePx(56),
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              fontSize: scalePx(58),
+              lineHeight: 1.21,
+              color: "#28282a",
+              caretColor: "transparent",
+            }}
+            onFocus={() => { setCaretFocused(true); setQuery(inputRef.current.value); measureCaret(); restartBlink(); }}
+            onBlur={() => setCaretFocused(false)}
+            onInput={(e) => { setQuery(e.target.value); measureCaret(); restartBlink(); }}
+            onKeyUp={() => { measureCaret(); restartBlink(); }}
+            onClick={() => { measureCaret(); restartBlink(); }}
+          />
+          {caretFocused && query && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                right: `calc(${scalePx(15)} + ${caretOffset}px)`,
+                top: scalePx(8),
+                height: scalePx(48),
+                width: scalePx(4),
+                backgroundColor: "#28282a",
+                opacity: caretOn ? 1 : 0,
+              }}
+            />
+          )}
+          {query.trim() && (
+            <div
+              className="absolute"
+              style={{
+                left: 0,
+                right: 0,
+                top: scalePx(70),
+                backgroundColor: "#fffdfa",
+              }}
+            >
+              {results.length === 0 ? (
+                <div
+                  dir="rtl"
+                  className="text-right"
+                  style={{
+                    padding: `${scalePx(18)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  אין תוצאות
+                </div>
+              ) : (
+                results.map((art, i) => (
+                  <div
+                    key={art.id}
+                    dir="rtl"
+                    onClick={() => goToResult(art)}
+                    className="flex items-baseline justify-between cursor-pointer"
+                    style={{
+                      padding: `${scalePx(14)} ${scalePx(15)}`,
+                      borderBottom: (i < results.length - 1 || allResults.length > results.length) ? "1px solid rgba(40, 40, 42, 0.2)" : "none",
+                      fontFamily: FONT_THEBASICS,
+                    }}
+                  >
+                    <span style={{ fontWeight: 500, fontSize: scalePx(22) }}>
+                      {art.title}
+                      {art.artist && (
+                        <span style={{ fontWeight: 400, color: "rgba(40, 40, 42, 0.6)" }}> {art.artist}</span>
+                      )}
+                    </span>
+                    <span style={{ fontSize: scalePx(16), color: "rgba(40, 40, 42, 0.5)", flexShrink: 0, marginInlineStart: scalePx(12) }}>
+                      {art.motif}
+                    </span>
+                  </div>
+                ))
+              )}
+              {allResults.length > results.length && (
+                <div
+                  dir="rtl"
+                  onClick={() => { window.location.href = window.MuseumSearch.urlFor(query); }}
+                  className="text-right cursor-pointer"
+                  style={{
+                    padding: `${scalePx(14)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  {`כל התוצאות (${allResults.length})`}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Grid/list view toggle, sitting just below the wordmark (reference
+    // frame_00: a dark filled grid-of-squares icon next to a lighter grey
+    // horizontal-lines icon, grid selected/active by default). The
+    // reference recording never demonstrates switching to list view, so
+    // this stays a static display — clicking list just marks it selected
+    // instead of actually re-laying out the grid, since there's no list
+    // layout to switch to yet.
+    function ViewToggle({ style, view, setView }) {
+      const [hovGrid, setHovGrid] = useState(false);
+      const [hovList, setHovList] = useState(false);
+      return (
+        <div id="ci-view-toggle" className="absolute flex pointer-events-auto" style={{ ...style, alignItems: "center", gap: scalePx(17) }}>
+          <img
+            src="public/images/index_icons/icon-grid-view.svg"
+            alt="תצוגת רשת"
+            role="button"
+            aria-pressed={view === "grid"}
+            className="cursor-pointer"
+            onClick={() => setView("grid")}
+            onMouseEnter={() => setHovGrid(true)}
+            onMouseLeave={() => setHovGrid(false)}
+            style={{ width: scalePx(53), height: scalePx(17), opacity: view === "grid" || hovGrid ? 1 : 0.4, transition: "opacity 150ms ease" }}
+          />
+          <img
+            src="public/images/index_icons/icon-list-view.svg"
+            alt="תצוגת רשימה"
+            role="button"
+            aria-pressed={view === "list"}
+            className="cursor-pointer"
+            onClick={() => setView("list")}
+            onMouseEnter={() => setHovList(true)}
+            onMouseLeave={() => setHovList(false)}
+            style={{ width: scalePx(51), height: scalePx(16), opacity: view === "list" || hovList ? 1 : 0.4, transition: "opacity 150ms ease" }}
+          />
+        </div>
+      );
+    }
+
+    // Every card's x/y/w/h/imgX/imgW/imgH is the exact box from the Figma
+    // frame (1761:2134, "אינדקס"), extracted directly via the Plugin API
+    // (each tile's own image-fill node + its two caption text nodes) at the
+    // 1728px canvas width. w/h is the FULL tile box (image + caption);
+    // imgW/imgH/imgX is just the image portion — imgX is nonzero on tiles
+    // where a narrower (usually portrait) scan sits centered under a wider
+    // caption row rather than spanning the tile's full width. description
+    // is the short 2-3 line hover brief (ending in a literal "...", a
+    // deliberate design touch) — not every tile has one yet.
+    const CARDS = [
+      { id: "1908:3045", artworkId: "hand-stone", x: 25, y: 165, w: 245, h: 443, imgX: 0, imgW: 245, imgH: 411, image: "public/refrence/index-page/גריין/אבן יד.webp", thumb: "public/images/index/idx1.webp", title: "אבן יד", subtitle: "ללא שם, 250,000 לפנה״ס", description: "אבן יד (ביפאס) מהפלאוליתי התחתון, מסותתת מצוֹר בצורת טיפה עם שוליים חדים סביב..." },
+      { id: "1908:3067", artworkId: "totem-legend", x: 278, y: 165, w: 247, h: 593, imgX: 0, imgW: 247, imgH: 561, image: "public/refrence/index-page/גריין/אגדת מוצא המשפחה על עמוד טוטם.webp", thumb: "public/images/index/idx2.webp", title: "אגדת מוצא הטוטם", subtitle: "המאה‑19, תרבות קוואקיוטל", description: "עמודי הטוטם של עמי החוף הצפון-מערבי של צפון אמריקה (כמו ההיידה, הטלינגיט והצ״ימשיאן) אינם אלילים שעובדים להם..." },
+      { id: "1908:3185", artworkId: "adam-rodin", x: 525, y: 165, w: 259, h: 402, imgX: 7, imgW: 252, imgH: 371, image: "public/refrence/index-page/גריין/אדם.webp", thumb: "public/images/index/idx3.webp", title: "אדם", subtitle: "אוגוסט רודן, 1880", description: "בשנת 1880 הוזמן רודן לעצב את שער הכניסה למוזיאון לאמנויות דקורטיביות שתוכנן בפריז..." },
+      { id: "1908:3371", artworkId: "air-iron-water", x: 792, y: 165, w: 547, h: 353, imgX: 1, imgW: 546, imgH: 322, image: "public/refrence/index-page/גריין/אוויר, ברזל ומים.webp", thumb: "public/images/index/idx4.webp", title: "אוויר, ברזל ומים", subtitle: "רובר דלונה, 1937", description: "אוויר ברזל ומים הוא ציור קיר ענקי שיצר רובּר דלונֶה ב-1937, לאולם הגדול של ארמון מסילות הברזל..." },
+      { id: "1908:3230", artworkId: "woman-neon", x: 1342, y: 165, w: 362, h: 265, imgX: 6, imgW: 356, imgH: 232, image: "public/refrence/index-page/גריין/אישה + נאון.webp", thumb: "public/images/index/idx5.webp", title: "אישה + נֵאון, ניו-יורק", subtitle: "ויליאם קליין, 1955", description: "צילום רחוב מטושטש ומגורען, אישה בתוך פסי אור של נאון. קליין שבר את כללי הצילום ה״נקי״..." },
+      { id: "1911:2464", artworkId: "venetian-woman", x: 1348, y: 420, w: 356, h: 1259, imgX: 0, imgW: 356, imgH: 1226, image: "public/refrence/index-page/גריין/אישה ונציאנית מס׳ 6.webp", thumb: "public/images/index/idx6.webp", title: "אישה ונציאנית מס’ 6", subtitle: "אלברטו ג׳אקומטי, 1956", description: "״אישה ונציאנית מס׳ 6״ (Femme de Venise VI) שייכת לסדרת ״נשות ונציה״ שיצר אלברטו ג״אקומטי..." },
+      { id: "1911:2438", artworkId: "alla-effigy", x: 1045, y: 506, w: 294, h: 742, imgX: 36, imgW: 258, imgH: 709, image: "public/refrence/index-page/גריין/אלה (אווה).webp", thumb: "public/images/index/idx7.webp", title: "אלה (אוה)", subtitle: "ללא שם, המאה ה‑19", description: "אַלָּה (אלת-יד) מעץ, ובראשה דמות אנוש מגולפת עם עיניים משובצות וכיסוי-ראש מחורץ. עבודה אוקיינית/פסיפית..." },
+      { id: "1911:2417", artworkId: "duchamp-widow", x: 781, y: 506, w: 293, h: 384, imgX: 12, imgW: 281, imgH: 352, image: "public/refrence/index-page/גריין/אלמנה טרייה.webp", thumb: "public/images/index/idx8.webp", title: "אלמנה טרייה", subtitle: "מרסל דושאן, 1954", description: "״אלמנה טריה״ (Fresh Widow), 1920, של מרסל דושאן היא דגם מוקטן של חלון צרפתי..." },
+      { id: "1908:3402", artworkId: "walking", x: 507, y: 556, w: 278, h: 283, imgX: 24, imgW: 254, imgH: 251, image: "public/refrence/index-page/גריין/אני הולך.webp", thumb: "public/images/index/idx9.webp", title: "אני הולך", subtitle: "מאטה, 1947", description: "ציור סוריאליסטי-מופשט של צורות ביומורפיות, קווים מתפצלים וכתמי צהוב וכתום..." },
+      { id: "1908:3269", artworkId: "feininger-barns", x: 277, y: 763, w: 248, h: 223, imgX: 1, imgW: 247, imgH: 190, image: "public/refrence/index-page/גריין/אסמים בלילה.webp", thumb: "public/images/index/idx10.webp", title: "אסמים בלילה", subtitle: "לניונל פיינינגר, 1930", description: "פיינינגר היה מן המאסטרים הראשונים בבאוהאוס. מ-1919 (בוויימאר ואחר כך בדסאו), עמד בראש סדנת ההדפס..." },
+      { id: "1908:3247", artworkId: "even-more", x: -11, y: 598, w: 282, h: 278, imgX: 35, imgW: 246, imgH: 246, image: "public/refrence/index-page/גריין/אף יותר.webp", thumb: "public/images/index/idx11.webp", title: "אף יותר", subtitle: "וסילי קנדינסקי, 1933", description: "וסילי קנדינסקי (1866–1944), יליד רוסיה, היה מן הציירים המשפיעים ומחלוצי האמנות המופשטת..." },
+      { id: "1911:2485", artworkId: "athletics", x: 23, y: 866, w: 248, h: 333, imgX: 1, imgW: 247, imgH: 299, image: "public/refrence/index-page/גריין/אתלטיקה קלה.webp", thumb: "public/images/index/idx12.webp", title: "אתלטיקה קלה", subtitle: "ליזלוטה גרבז׳ינה, 1930", description: "״אתלטיקה קלה״ של ליזלוטה גרשבינה הוא צילום שחור-לבן משנות ה-30 ובו שלוש צעירות נתפסות באמצע זינוק..." },
+      { id: "1911:2508", artworkId: "flavin-untitled", x: 278, y: 975, w: 247, h: 224, imgX: 0, imgW: 247, imgH: 190, image: "public/refrence/index-page/גריין/בלי כותרת (לבוב ופט רום).webp", thumb: "public/images/index/idx13.webp", title: "בלי כותרת (לבוב ופט רום)", subtitle: "דן פלווין, 1969‑1970", description: "בשנות ה-60 היה דן פְלווין, כמו אמני מינימליזם אחרים, שותף לגישה האנליטית לאמנות..." },
+      { id: "1911:2530", artworkId: "pomegranate-bottle", x: 531, y: 827, w: 254, h: 291, imgX: 0, imgW: 254, imgH: 253, image: "public/refrence/index-page/גריין/בקבוק דמוי רימון.webp", thumb: "public/images/index/idx14.webp", title: "בקבוק דמוי רימון", subtitle: "ללא שם, המאה ה‑14 לספירה", description: "בקבוק דמוי רימון מן המאה ה-13 עד ה-14 לפנה״ס..." },
+      { id: "1911:2552", artworkId: "ribera-bartholomew", x: 794, y: 881, w: 279, h: 405, imgX: 0, imgW: 279, imgH: 371, image: "public/refrence/index-page/גריין/ברתולומאו הקדוש.webp", thumb: "public/images/index/idx15.webp", title: "עינויי ברתולומאו הקדוש", subtitle: "ג׳וזפה דה ריברה, 1618", description: "ג'וֹזֶפֶּה דֶה ריבֶּרה, אבי ציור הבארוק הספרדי ומי שהשפיע על יצירותיהם של וֶלַסְקֶס, זוּרְבָּרָן ומוּריוֹ, נדד בעשור השני של המאה ה-17 ברחבי איטליה..." },
+      { id: "1911:2573", artworkId: "duchamp-bicycle-wheel", x: 1032, y: 1240, w: 307, h: 347, imgX: 49, imgW: 258, imgH: 324, image: "public/refrence/index-page/גריין/גלגל אופניים.webp", thumb: "public/images/index/idx16.webp", title: "גלגל אופניים", subtitle: "מרסל דושאן, 1964", description: "״גלגל אופניים״ של מרסל דושאן הוא חפץ תעשייתי מן המוכן..." },
+      { id: "1911:2599", artworkId: "motherwell-guillotine", x: 792, y: 1291, w: 281, h: 404, imgX: 0, imgW: 281, imgH: 371, image: "public/refrence/index-page/גריין/גליוטינה.webp", thumb: "public/images/index/idx17.webp", title: "גליוטינה", subtitle: "רוברט מות׳וול, 1966", description: "הצייר ואיש האקדמיה רוברט מָדֶ״רוֶול היה דובר תנועת האקספרסיוניזם המופשט וממוביליה..." },
+      { id: "1911:2619", artworkId: "ganga-devi", x: 533, y: 1124, w: 254, h: 412, imgX: 0, imgW: 254, imgH: 377, image: "public/refrence/index-page/גריין/גנגה דווי אלת הנהר.webp", thumb: "public/images/index/idx18.webp", title: "גַנְגָה דֶווי אלת הנהר", subtitle: "ללא שם, המאה ה‑8‑10", description: "פסל אבן-חול הודי של אלת הגנגה, עומדת בתנוחה מתעגלת ומעוטרת תכשיטים..." },
+      { id: "1911:2640", artworkId: "axe", x: 278, y: 1206, w: 248, h: 145, imgX: 0, imgW: 248, imgH: 126, image: "public/refrence/index-page/גריין/גרזן.webp", thumb: "public/images/index/idx19.webp", title: "גרזן", subtitle: "ללא שם, המאה ה‑11 לפנה״ס", description: "ראש גרזן מאבן עם נקב מרכזי להשחלת ידית עץ, שחוק ומכוסה פטינה..." },
+      { id: "1911:2663", artworkId: "paris-graffiti", x: 22, y: 1204, w: 249, h: 351, imgX: 0, imgW: 249, imgH: 317, image: "public/refrence/index-page/גריין/גרפיטי פריזאי.webp", thumb: "public/images/index/idx20.webp", title: "גרפיטי פריזאי", subtitle: "ברסאי (יולה הולאס), 1957", description: "בעשורים הראשונים של המאה ה-20, הרבו צלמים לצלם גרפיטי, לא רק בחיפוש אחרי צורה אמנותית..." },
+      { id: "1913:3372", artworkId: "building-model", x: 1348, y: 1672, w: 356, h: 344, imgX: 0, imgW: 356, imgH: 307, image: "public/refrence/index-page/גריין/דגם מבנה.webp", thumb: "public/images/index/idx21.webp", title: "דגם מבנה", subtitle: "ללא שם, 3000‑2650 לפנה״ס", description: "ממצא נדיר זה, דגם בית, חושף לעינינו את צורת בתי המגורים בערד: מבנה קובייתי חד-קומתי..." },
+      { id: "1913:3334", artworkId: "suppression", x: 1046, y: 1595, w: 293, h: 221, imgX: 35, imgW: 258, imgH: 198, image: "public/refrence/index-page/גריין/דיכוי החפץ.webp", thumb: "public/images/index/idx22.webp", title: "דיכוי החפץ", subtitle: "ויקטור בראונר, 1966", description: "דיכוי החפץ היא יצירה העוסקת במתח שבין אובייקט, גוף ותודעה..." },
+      { id: "1913:3357", artworkId: "annunciation", x: 792, y: 1685, w: 282, h: 220, imgX: 0, imgW: 282, imgH: 203, image: "public/refrence/index-page/גריין/הבשורה למרים (קטע).webp", thumb: "public/images/index/idx23.webp", title: "הבשורה למרים", subtitle: "ללא שם,המאה ה‑17", description: "היצירה מתארת את ״הבשורה למרים״ — הרגע שבו המלאך גבריאל מבשר למרים שתהרה ותלד את ישו..." },
+      { id: "1913:3319", artworkId: "spice-tower", x: 531, y: 1541, w: 256, h: 364, imgX: 0, imgW: 254, imgH: 340, image: "public/refrence/index-page/גריין/הדס לבשמים.webp", thumb: "public/images/index/idx24.webp", title: "הדס לבשמים", subtitle: "ללא שם, 1810‑1824", description: "מגדל בשמים לטקס ההבדלה במוצאי שבת — כלי המחזיק בשמים ריחניים..." },
+      { id: "1913:3304", artworkId: "evans-church", x: 277, y: 1356, w: 249, h: 327, imgX: 0, imgW: 249, imgH: 306, image: "public/images/index/idx25.webp", thumb: "public/images/index/idx25.webp", title: "כנסיית עץ, קרוליינה הדרומית", subtitle: "ווקר אוונס, 1936", description: "״כנסיית עץ, קרוליינה הדרומית״ של ווקר אוונס היא צילום שחור-לבן חזיתי של כנסייה כפרית צנועה מקרשי עץ..." },
+      { id: "1913:3299", artworkId: "turrell-space", x: 9, y: 1559, w: 263, h: 292, imgX: 15, imgW: 247, imgH: 260, image: "public/refrence/index-page/גריין/החלל הרואה.webp", thumb: "public/images/index/idx26.webp", title: "החלל הרואה", subtitle: "ג׳יימס טורל, 1992", description: "״החלל הרואה״ שייך לסדרה חללי שמים שראשיתה בשלהי שנות ה-60..." },
+      { id: "1913:3402", artworkId: "manray-lovers", x: 280, y: 1701, w: 246, h: 626, imgX: 0, imgW: 246, imgH: 606, previewTransform: "rotate(-90deg)", image: "public/refrence/index-page/גריין/הנאהבים.webp", thumb: "public/images/index/idx27.webp", title: "הנאהבים", subtitle: "מאן‑ריי, 1964", description: "״שעת המצפה — הנאהבים״ של מן ריי הוא דימוי סוריאליסטי איקוני: זוג שפתיים אדומות ענקיות..." },
+      { id: "1913:3418", artworkId: "avenger", x: 531, y: 1910, w: 314, h: 270, imgX: 0, imgW: 312, imgH: 250, image: "public/refrence/index-page/גריין/הנוקם.webp", thumb: "public/images/index/idx28.webp", title: "הנוקם", subtitle: "ארנסט ברלך, 1914", description: "פסל ברונזה אקספרסיוניסטי של דמות עטוית גלימה מסתערת קדימה, קפואה באמצע תנופת..." },
+      { id: "1913:3433", artworkId: "calf-temple", x: 848, y: 1910, w: 227, h: 306, imgX: 0, imgW: 226, imgH: 288, image: "public/refrence/index-page/גריין/העגל והיכלו.webp", thumb: "public/images/index/idx29.webp", title: "העגל והיכלו", subtitle: "המאה ה‑16 לפנה״ס", description: "״העגל והיכלו״ הוא ממצא מאשקלון מן התקופה הברונזה התיכונה, המאה ה-16 לפנה״ס..." },
+      { id: "1913:3448", artworkId: "sage-sky", x: 1065, y: 1821, w: 274, h: 233, imgX: 16, imgW: 258, imgH: 214, image: "public/refrence/index-page/גריין/הצד העליון של השמיים.webp", thumb: "public/images/index/idx30.webp", title: "הצד העליון של השמים", subtitle: "קיי סייג׳, 1944", description: "״הצד העליון של השמים״ (1944) של קיי סייג' הוא נוף חלומי סוריאליסטי..." },
+      { id: "1916:2486", artworkId: "implications", x: 1348, y: 2007, w: 356, h: 391, imgX: 1, imgW: 355, imgH: 354, image: "public/refrence/index-page/גריין/השלכות.webp", thumb: "public/images/index/idx31.webp", title: "השלכות", subtitle: "בני (ראובן) אפרת, 1978", description: "פסל חוץ מינימליסטי מגושי אבן גיר מחוספסים — לוח נטוי מעל לוחות אופקיים, וקו דק מתוח ביניהם..." },
+      { id: "1916:2578", artworkId: "gottlieb-tangency", x: 1078, y: 2058, w: 261, h: 417, imgX: 0, imgW: 261, imgH: 386, image: "public/refrence/index-page/גריין/השקה.webp", thumb: "public/images/index/idx32.webp", title: "השקה", subtitle: "אדולף גוטליב, 1960", description: "היצירה ״השקה״ שייכת ככל הנראה לסדרת ההתפרצות (Burst), שגוטליב יצר החל מ-1956..." },
+      { id: "1916:2562", artworkId: "venus-restored", x: 848, y: 2221, w: 227, h: 305, imgX: 0, imgW: 226, imgH: 285, image: "public/refrence/index-page/גריין/ונוס משוחזרת.webp", thumb: "public/images/index/idx33.webp", title: "ונוס משוחזרת", subtitle: "מאן‑ריי, 1971", description: "טורסו נשי קלאסי מגבס, מסוג \"ונוס\", כרוך וקשור בחבל. מאן ריי (המקור מ-1936) חיבר את היופי הקלאסי לכבילה..." },
+      { id: "1916:2531", artworkId: "spring-time", x: 531, y: 2184, w: 314, h: 351, imgX: 0, imgW: 312, imgH: 333, image: "public/refrence/index-page/גריין/זמן אביב.webp", thumb: "public/images/index/idx34.webp", title: "זמן אביב 2", subtitle: "מאן‑ריי, 1971", description: "מאן ריי הפך את חתימתו לאובייקט תלת-ממדי שובב..." },
+      { id: "1916:2516", artworkId: "khamar", x: 280, y: 2332, w: 246, h: 647, imgX: 0, imgW: 246, imgH: 627, image: "public/refrence/index-page/גריין/ח׳מר.webp", thumb: "public/images/index/idx35.webp", title: "ח׳מר", subtitle: "איסמו נוגוצ׳י, 1962", description: "פסל מופשט וביומורפי מאבן כהה, בצורת גוף מתעקל וחלול. נוגוצ'י — שתכנן גם את גן בילי רוז עצמו..." },
+      { id: "1913:3387", artworkId: "christo-storefront", x: 19, y: 1843, w: 254, h: 350, imgX: 2, imgW: 251, imgH: 317, image: "public/refrence/index-page/גריין/חזית חנות.webp", thumb: "public/images/index/idx36.webp", title: "חזית חנות", subtitle: "כריסטו יאווצ׳ף, 1964‑1965", description: "״חזית חנות״  של כריסטו הוא רישום-קולאז' (עם בד ושרטוטי מידות) לאחת מ\"חזיתות החנות\" שלו..." },
+      { id: "1916:2501", artworkId: "gross-window", x: 22, y: 2194, w: 251, h: 541, imgX: 0, imgW: 249, imgH: 506, image: "public/refrence/index-page/גריין/חלון גג בירושלים.webp", thumb: "public/images/index/idx37.webp", title: "חלון גג בירושלים", subtitle: "מיכאל גרוס, 1966‑1967", description: "מיכאל גרוס (1920–2004) היה צייר ופסל ישראלי, בן למשפחה גלילית ותיקה..." },
+      { id: "1916:2760", artworkId: "studio-window", x: 23, y: 2738, w: 248, h: 360, imgX: 1, imgW: 247, imgH: 326, image: "public/refrence/index-page/גריין/חלון הסדנה.webp", thumb: "public/images/index/idx38.webp", title: "חלון הסדנה", subtitle: "פאבלו פיקסו, 1943", description: "מבט קוביסטי מחלון הסטודיו אל גגות פריז — ארובות, גגות מנסר ומרזב מתפתל בחזית..." },
+      { id: "1916:2744", artworkId: "carnelian-bead", x: 532, y: 2538, w: 313, h: 424, imgX: 0, imgW: 312, imgH: 390, image: "public/refrence/index-page/גריין/חרוז מתוך מטמון כסף.webp", thumb: "public/images/index/idx39.webp", title: "חרוז מתוך מטמון כסף", subtitle: "ללא שם, המאה ה‑7 לפנה״ס", description: "אבן קרניאול היא אבן חן בגווני אדום־כתום עד חום עמוק, השייכת למשפחת הכלקדון..." },
+      { id: "1916:2728", artworkId: "scarab-servant", x: 848, y: 2529, w: 227, h: 209, imgX: 0, imgW: 226, imgH: 174, image: "public/refrence/index-page/גריין/חרפושית ועליה משרת האל.webp", thumb: "public/images/index/idx40.webp", title: "חרפושית ועליה משרת האל", subtitle: "ללא שם, המאה ה‑18 לפנה״ס", description: "חותם-קמע מצרי בצורת חיפושית הזבל (Scarabaeus sacer), סמל האל חֵפְּרִי, הזריחה והלידה..." },
+      { id: "1916:2706", artworkId: "transparent-topology", x: 1079, y: 2465, w: 265, h: 241, imgX: 0, imgW: 265, imgH: 210, image: "public/refrence/index-page/גריין/טופולוגיה שקופה.webp", thumb: "public/images/index/idx41.webp", title: "טופולוגיה שקופה", subtitle: "ג׳ורג׳ קפש, 1978", description: "דימוי צילומי מופשט של מישורים שקופים מצטלבים, היוצרים צורה עדינה ומרחפת בשחור-לבן..." },
+      { id: "1916:2689", artworkId: "aphrodite-torso", x: 1347, y: 2390, w: 357, h: 504, imgX: 2, imgW: 355, imgH: 470, image: "public/refrence/index-page/גריין/טורסו של אפרודיטה.webp", thumb: "public/images/index/idx42.webp", title: "טורסו של אפרודיטה", subtitle: "ללא שם, המאה ה‑3 לפנה״ס", description: "טורסו נשי קטן משיש, של אפרודיטה, מהתקופה ההלניסטית, חסר ראש וגפיים. גם בקטעיותו הוא שומר..." },
+      { id: "1916:2905", artworkId: "bountiful-harvest", x: 1077, y: 2696, w: 265, h: 255, imgX: 2, imgW: 261, imgH: 221, image: "public/refrence/index-page/גריין/יבול יפה.webp", thumb: "public/images/index/idx43.webp", title: "יבול יפה", subtitle: "קאמי פיסרו, 1893", description: "פיסרו חי באֶראני שבכפר הצרפתי מ-1884 ועד מותו ב-1903, והיצירה הזו שייכת לתקופת אֶראני המאוחרת..." },
+      { id: "1916:2887", artworkId: "vessel-handle", x: 848, y: 2738, w: 227, h: 366, imgX: 0, imgW: 227, imgH: 317, image: "public/refrence/index-page/גריין/ידית כלי גדול מעוטרת בשני דולפינים צוללים לים.webp", thumb: "public/images/index/idx44.webp", title: "ידית בצורת דולפינים", subtitle: "ללא שם, המאה ה‑1 לפנה״ס", description: "דית יצוקה משני דולפינים סימטריים שגופם מתעקל כלפי מעלה וראשיהם כמעט נפגשים, ויוצרים קשת..." },
+      { id: "1916:2872", artworkId: "sickle-handle", x: 530, y: 2967, w: 315, h: 229, imgX: 2, imgW: 312, imgH: 209, image: "public/refrence/index-page/גריין/ידית מגל.webp", thumb: "public/images/index/idx45.webp", title: "ידית מגל", subtitle: "15,000‑13,500 לפנה״ס", description: "ידית מעוקלת מעצם, שאליה הוצמדו להבי צור ליצירת מגל. כלי אֶפּי-פלאוליתי..." },
+      { id: "1920:2550", artworkId: "jericho-first", x: 4, y: 3489, w: 840, h: 265, imgX: 20, imgW: 819, imgH: 240, image: "public/refrence/index-page/גריין/יריחו תחילה.webp", thumb: "public/images/index/idx46.webp", title: "יריחו תחילה", subtitle: "שריף ואכד, 2002", description: "״יריחו תחילה״ (2002) של האמן הפלסטיני שריף ואחד מבוססת על פסיפס מן המאה ה-8..." },
+      { id: "1916:2794", artworkId: "cylindrical-jar", x: 279, y: 2984, w: 247, h: 512, imgX: 0, imgW: 247, imgH: 462, image: "public/refrence/index-page/גריין/כד גלילי לגבינה מיובאת ממצרים.webp", thumb: "public/images/index/idx47.webp", title: "כד גלילי לגבינה מיובאת ממצרים", subtitle: "ללא שם, 3,500‑5000 לפנה״ס", description: "כד גלילי מחרס לגבינה ממצרים — כלי קרמי פשוט ומוארך עם שפה מעט מודגשת, ששוקם משברים..." },
+      { id: "1918:2659", artworkId: "miners-rest", x: 532, y: 3201, w: 313, h: 235, imgX: 0, imgW: 312, imgH: 215, image: "public/refrence/index-page/גריין/כורים במנוחה.webp", thumb: "public/images/index/idx48.webp", title: "כורים במנוחה", subtitle: "יוחנן סימון, 1950", description: "קומפוזיציה מופשטת-קוביסטית של דמויות שרועות במנוחה, בגווני אדום-חום וצורות שחורות זוויתיות. סימון, צייר הקיבוץ..." },
+      { id: "1918:2637", artworkId: "column-capital", x: 848, y: 3104, w: 227, h: 558, imgX: 0, imgW: 226, imgH: 509, image: "public/refrence/index-page/גריין/כותרת וחוליות עמוד.webp", thumb: "public/images/index/idx49.webp", title: "כותרת וחוליות עמוד", subtitle: "ללא שם, המאה ה‑1 לספירה", description: "הכותרת עשויה בסדר הקורינתי האופייני לתקופה, אלא שעיצובה לא נשלם: בצדה האחד מגולפים שני פרחי שושן..." },
+      { id: "1916:2778", artworkId: "village-square-basra", x: 23, y: 3086, w: 248, h: 235, imgX: 1, imgW: 247, imgH: 200, image: "public/refrence/index-page/גריין/כיכר הבית בסרה.webp", thumb: "public/images/index/idx50.webp", title: "כיכר הכפר בסרה", subtitle: "חיים סוטין, 1920", description: "נוף אקספרסיוניסטי סוער של כפר בפירנאים — בתים נטויים וצורות מתפתלות..." },
+      { id: "1916:2999", artworkId: "pastilli-chair", x: 1079, y: 2943, w: 261, h: 228, imgX: 0, imgW: 261, imgH: 194, image: "public/refrence/index-page/גריין/כיסא ״פסטיל״.webp", thumb: "public/images/index/idx51.webp", title: "כיסא ״פסטיל״", subtitle: "אירו ארניו, 1967", description: "בראשית שנות ה־60 ובמסגרת התרחקותו ממוסכמות העיצוב המסורתיות ערך אירו ארניו..." },
+      { id: "1916:2981", artworkId: "fish-vessel", x: 1349, y: 2884, w: 355, h: 213, imgX: 0, imgW: 355, imgH: 179, image: "public/refrence/index-page/גריין/כלי בצורת דג.webp", thumb: "public/images/index/idx52.webp", title: "כלי בצורת דג", subtitle: "ללא שם, האלף השלישי לפנה״ס", description: "ובייקט אבן מגולף בצורת דג מסוגנן, עם פתח/זִיז בקצה העליון שמרמז שזה כלי קיבול ולא פסלון בלבד. דפוס הנקודות החרוטות לאורך הגוף..." },
+      { id: "1918:2548", artworkId: "deity-stand", x: 1349, y: 3087, w: 355, h: 533, imgX: 0, imgW: 355, imgH: 502, image: "public/refrence/index-page/גריין/כן להצבת פסל אלוהות.webp", thumb: "public/images/index/idx53.webp", title: "כן להצבת פסל אלוהות", subtitle: "ללא שם, המאה ה‑10 לפנה״ס", description: "כן פולחן מחרס בנוי קומות, ובהן בעלי חיים, אריות ודמויות אנוש מובלטים סביב דיסקה מכונפת. אובייקטים כאלה ניצבו במקדשים..." },
+      { id: "1918:2564", artworkId: "exodus-poster", x: 1079, y: 3161, w: 262, h: 395, imgX: 0, imgW: 262, imgH: 361, image: "public/refrence/index-page/גריין/כרזה לסרט אקסודוס.webp", thumb: "public/images/index/idx54.webp", title: "כרזה לסרט ״אקסודוס״", subtitle: "סול בס, 1960", description: "כרזת הסרט ״אקסודוס״ (Exodus, 1960) בעיצובו של סול בס — דימוי גרפי של ידיים מושטות..." },
+      { id: "1920:2631", artworkId: "tomb-inscription", x: 1349, y: 3613, w: 355, h: 360, imgX: 0, imgW: 355, imgH: 337, image: "public/refrence/index-page/גריין/כתובת ממערת קבורה.webp", thumb: "public/images/index/idx55.webp", title: "כתובת ממערת קבורה", subtitle: "ללא שם, המאה ה‑7 לפנה״ס", description: "שבר אבן גיר ועליו כתובת חרוטה בכתב עברי קדום, ממערת קבורה מימי בית ראשון..." },
+      { id: "1920:2615", artworkId: "ancestors-board", x: 1079, y: 3546, w: 261, h: 827, imgX: 0, imgW: 261, imgH: 791, image: "public/refrence/index-page/גריין/לוח אבות קדמונים (גופה).webp", thumb: "public/images/index/idx56.webp", title: "לוח אבות קדמונים (״גוֹפֶּה״)", subtitle: "בני קרווה, המאה ה‑19‑20", description: "מסכה או לוח טקסי מעץ מאזור האוקיינוס השקט (כנראה פפואה גינאה החדשה), מוארך וצר, ועליו פנים סכמטיות..." },
+      { id: "1920:2599", artworkId: "bulls-eye-window", x: 848, y: 3648, w: 227, h: 268, imgX: 0, imgW: 226, imgH: 211, image: "public/refrence/index-page/גריין/לוח חלון עין השור וחלק ממסגרת אבן.webp", thumb: "public/images/index/idx57.webp", title: "לוח חלון ״עין השור״", subtitle: "התקופה הביזנטית", description: "לוח זכוכית עגול (זכוכית כתר) שנוצק בסיבוב, משובץ בשבר ממסגרת האבן שלו..." },
+      { id: "1920:2582", artworkId: "nanna-ningal-tablet", x: 392, y: 3757, w: 452, h: 315, imgX: 29, imgW: 422, imgH: 278, image: "public/refrence/index-page/גריין/לוחית המתארת את האלים ננה ונינגל.webp", thumb: "public/images/index/idx58.webp", title: "לוחית המתארת את האלים ננה ונינגל", subtitle: "האלף השלישי לפנה״ס", description: "תבליט חימר מסופוטמי קטן עם שתי דמויות אלוהיות יושבות..." },
+      { id: "1920:2566", artworkId: "warriors-tablet", x: 17, y: 3757, w: 397, h: 344, imgX: 7, imgW: 389, imgH: 299, image: "public/refrence/index-page/גריין/לוחית המתארת שורת לוחמים.webp", thumb: "public/images/index/idx59.webp", title: "לוחית המתארת שורת לוחמים", subtitle: "550‑525 לפנה״ס", description: "שבר טרקוטה צבוע בלבן ואדום ובו קסדות ומגיני לוחמים בשורה. רצף חוזר של ראשי לחימה..." },
+      { id: "1922:2643", artworkId: "acrobat-drum", x: 8, y: 4107, w: 406, h: 757, imgX: 16, imgW: 389, imgH: 709, image: "public/refrence/index-page/גריין/לוליין עומד על ידיו על תוף.webp", thumb: "public/images/index/idx60.webp", title: "לוליין עומד על ידיו על תוף", subtitle: "סוף המאה ה‑18", description: "פסלון עץ יפני של אקרובט הפוך, גוף שלם המאזן את עצמו על כלי..." },
+      { id: "1922:2725", artworkId: "rothko-untitled", x: 416, y: 4056, w: 428, h: 872, imgX: 5, imgW: 422, imgH: 852, image: "public/refrence/index-page/גריין/ללא כותרת.webp", thumb: "public/images/index/idx61.webp", title: "ללא כותרת", subtitle: "מרק רותקו, 1955", description: "מרק רותקו היה תלמידו של ארשיל גורקי ונודעה לו השפעה עמוקה על אמנותו של רותקו כמו גם על אקספרסיוניסטים מופשטים אחרים..." },
+      { id: "1911:2722", artworkId: "mabu", x: 848, y: 3894, w: 227, h: 214, imgX: 0, imgW: 227, imgH: 155, image: "public/refrence/index-page/גריין/מאבו.webp", thumb: "public/images/index/idx62.webp", title: "מאבו", subtitle: "רוברט פראנק, 1977", description: null },
+      { id: "1925:2579", artworkId: "wallstreet-abbott", x: 848, y: 4072, w: 227, h: 620, imgX: 1, imgW: 224, imgH: 561, image: "public/refrence/index-page/גריין/מבט על וול סטריט מברודווי.webp", thumb: "public/images/index/idx63.webp", title: "מבט על וולסטריט מברודווי", subtitle: "ברניס אבוט, 1934", description: "ברניס אבוט (1898–1991), אמריקאית ילידת אוהיו, בילתה את שנות ה-20 כצלמת פורטרטים חדשנית בפריז..." },
+      { id: "1925:2596", artworkId: "clock-tower", x: 1079, y: 4378, w: 263, h: 387, imgX: 0, imgW: 263, imgH: 355, image: "public/refrence/index-page/גריין/מגדל השעון.webp", thumb: "public/images/index/idx64.webp", title: "מגדל שעון", subtitle: "שרל מריון, 1852", description: "התחריט ״מגדל השעון״ נדפס לימים במהדורה גדולה של 600 עותקים עבור כתב העת L'Artiste (1858)..." },
+      { id: "1922:2628", artworkId: "nahalal-water-tower", x: 1349, y: 3973, w: 355, h: 509, imgX: 0, imgW: 355, imgH: 485, image: "public/refrence/index-page/גריין/מגדל מים בנהלל.webp", thumb: "public/images/index/idx65.webp", title: "מגדל מים בנהלל", subtitle: "ליזלוטה גרז׳בינה, 1939", description: "תצלום זה של ליזלוטה גרז׳בינה מתעד את מגדל המים (הבריכה) שבמרכז המושב נהלל – מבנה סמל מודרניסטי המאפיין את הבנייה וההתיישבות העובדת בארץ-ישראל בשנות ה-30..." },
+      { id: "1922:2709", artworkId: "radio-tower", x: 1349, y: 4483, w: 355, h: 524, imgX: 0, imgW: 355, imgH: 499, image: "public/refrence/index-page/גריין/מגדל רדיו.webp", thumb: "public/images/index/idx66.webp", title: "מגדל רדיו", subtitle: "מרגרט ברק‑וייט, 1945", description: "מבט תחתי החודר אל תוך מבנה המתכת ויוצר דימוי גאומטרי מסחרר..." },
+      { id: "1928:2622", artworkId: "arman-tribute", x: 1079, y: 4754, w: 263, h: 528, imgX: 2, imgW: 260, imgH: 508, image: "public/refrence/index-page/גריין/מחווה לרובע הביגוד.webp", thumb: "public/images/index/idx67.webp", title: "מחווה לרובע הביגוד", subtitle: "ארמן פרננדז, 1974", description: "״מחווה לרובע הביגוד״ (1974) היא אקומולציה כזו: מונולית בטון אנכי שבתוכו משוקעים כלי המלאכה..." },
+      { id: "1925:2628", artworkId: "albers-homage", x: 849, y: 4672, w: 226, h: 270, imgX: 0, imgW: 226, imgH: 221, image: "public/refrence/index-page/גריין/מחווה לריבוע מס 853.webp", thumb: "public/images/index/idx68.webp", title: "מחווה לריבוע מס״ 853", subtitle: "יוזף אלברס, 1967", description: "יוזף אלברס (1888–1976) היה מן הדמויות המשפיעות במודרניזם..." },
+      { id: "1925:2611", artworkId: "shahn-shelter", x: 24, y: 4845, w: 390, h: 351, imgX: 0, imgW: 389, imgH: 307, image: "public/refrence/index-page/גריין/מחסה ארגעי למהגרי עבודה בארקסנו.webp", thumb: "public/images/index/idx69.webp", title: "מחסה ארעי למהגרי עבודה בארקנסו", subtitle: "בן שאן, 1935", description: "״מחסה ארעי למהגרי עבודה בארקנסו״ של בן שאן הוא צילום דוקומנטרי שחור-לבן של מבנה מאולתר מקרשים, פחים וסמרטוטים הנתמך במוטות..." },
+      { id: "1928:2661", artworkId: "malka-gross", x: 421, y: 4933, w: 423, h: 618, imgX: 0, imgW: 422, imgH: 598, image: "public/refrence/index-page/גריין/מלכה.webp", thumb: "public/images/index/idx70.webp", title: "מלכה", subtitle: "מיכאל גרוס, 1969‑1970", description: "״מלכה״ (1969–70) של מיכאל גרוס היא פסל ממתכת צבועה — גליל אדום מונומנטלי שנחתך בתנועה מעוקלת..." },
+      { id: "1928:2676", artworkId: "moon-lamp", x: 24, y: 5177, w: 390, h: 420, imgX: 0, imgW: 390, imgH: 400, image: "public/refrence/index-page/גריין/מנורת ״ירח״.webp", thumb: "public/images/index/idx71.webp", title: "מנורת ״ירח״", subtitle: "ורנר פנטון, 1960", description: "מנורת תקרה מטבעות מתכת קונצנטריות שניתן לסובב כדי לחשוף את הנורה..." },
+      { id: "1928:2639", artworkId: "surreal-mass", x: 849, y: 4928, w: 224, h: 346, imgX: 0, imgW: 224, imgH: 311, image: "public/refrence/index-page/גריין/מסה סוריאליסטית.webp", thumb: "public/images/index/idx72.webp", title: "מסה סוראליסטית", subtitle: "דאלי, 1934", description: "נוף כחלחל עם ברוש שחור וחפץ מרחף ננעץ באלכסון. דימוי חלומי בנייר, בנוי..." },
+      { id: "1928:2604", artworkId: "jaguar-mask", x: 1349, y: 5008, w: 355, h: 561, imgX: 0, imgW: 355, imgH: 537, previewW: "55vw", previewMaxW: "760px", previewMaxH: "1050px", image: "public/refrence/index-page/גריין/מסכה בדמות צדודית.webp", thumb: "public/images/index/idx73.webp", title: "מסכת חזה בדמות צדודית", subtitle: "600‑900 לפנה״ס", description: "שבר אבן ירקרק ובו פרופיל אנושי עם נקבי תליה. אובייקט גוף קטוע, בין מסכה לתכשיט..." },
+      { id: "1928:2746", artworkId: "ben-maglos-stele", x: 1079, y: 5286, w: 261, h: 409, imgX: 2, imgW: 259, imgH: 389, image: "public/refrence/index-page/גריין/מצבת בן מגלוס.webp", thumb: "public/images/index/idx74.webp", title: "מצבת בן מגלוס", subtitle: "455 לפנה״ס", description: "מצבה זו היא מצבת קבורה יוונית קלאסית (סטלה / Stela) המוקדשת לנפטר שהיה בנם של מגלוס. המצבה מציגה את האסתטיקה ואת תפיסת המוות..." },
+      { id: "1928:2728", artworkId: "siren-mirror", x: 847, y: 5259, w: 226, h: 354, imgX: 2, imgW: 224, imgH: 316, image: "public/refrence/index-page/גריין/מראה בעלת ידית סירנה.webp", thumb: "public/images/index/idx75.webp", title: "מראה בעלת ידית סירנה", subtitle: "450‑425 לפנה״ס", description: "מראת ברונזה שבבסיסה דמות מכונפת — סירנה — שכנפיה הפרושות אוחזות  במראה..." },
+      { id: "1928:2713", artworkId: "optical-parable", x: 421, y: 5554, w: 423, h: 576, imgX: 1, imgW: 422, imgH: 556, image: "public/refrence/index-page/גריין/משל אופטי.webp", thumb: "public/images/index/idx76.webp", title: "משל אופטי", subtitle: "מנואל אלווראס בראבו, 1931", description: "״משל אופטי״ היא אחת מהעבודות האייקוניות והמוכרות ביותר של מנואל אלווראס בראבו, ואחת הדוגמאות המובהקות למפגש שבין סוריאליזם לבין צילום רחוב מודרניסטי..." },
+      { id: "1928:2693", artworkId: "spindle-whorl", x: 24, y: 5602, w: 390, h: 414, imgX: 2, imgW: 388, imgH: 394, image: "public/refrence/index-page/גריין/משקולת פרך.webp", thumb: "public/images/index/idx77.webp", title: "משקולת פלך", subtitle: "המאה ה‑10‑6 לפנה״ס", description: "דיסקה עגולה ושטוחה עם חור במרכזה, מלוטשת ובעלת פטינה כהה..." },
+      { id: "1928:2817", artworkId: "immaculate-sketch", x: 849, y: 5615, w: 226, h: 337, imgX: 0, imgW: 226, imgH: 299, image: "public/refrence/index-page/גריין/מתווה להתערבות ללא רבב.webp", thumb: "public/images/index/idx78.webp", title: "מתווה ל״התעברות ללא רבב״", subtitle: "דאלי, 1930", description: "רישום קווי צפוף של דמות נשית מתפתלת מעלה. תנועה ספירלית כלפי שמים..." },
+      { id: "1928:2833", artworkId: "negev", x: 1079, y: 5699, w: 260, h: 204, imgX: 2, imgW: 258, imgH: 184, image: "public/refrence/index-page/גריין/נגב.webp", thumb: "public/images/index/idx79.webp", title: "נגב", subtitle: "מגדלנה אבאקנוביץ׳, 1987", description: "ביומה הראשון של אבאקנוביץ׳ בירושלים, באפריל 1987, היא התרשמה עמוקות ממראה אבן הגיר המקומית..." },
+      { id: "1928:2768", artworkId: "elbe-river", x: 1349, y: 5568, w: 355, h: 245, imgX: 0, imgW: 354, imgH: 221, image: "public/refrence/index-page/גריין/נהר האלבה בדרזדן.webp", thumb: "public/images/index/idx80.webp", title: "נהר האלבה בדרזדן", subtitle: "אוסקר קוקושקה, 1920", description: "נוף עירוני אקספרסיוניסטי במשיכות מכחול עזות וצבע שבור. הנהר והגדה מתפרקים לכתמי צבע רוטטים..." },
+      { id: "1928:2849", artworkId: "surreal-landscape", x: 1349, y: 5816, w: 355, h: 519, imgX: 0, imgW: 354, imgH: 496, image: "public/refrence/index-page/גריין/נוף סוריאליסטי.webp", thumb: "public/images/index/idx81.webp", title: "נוף סוראליסטי", subtitle: "וילהלם ביירק‑פטרסון, 1941", description: "״נוף סוריאליסטי״ של וילהלם ברקה-פטרסן הוא דימוי חלומי שבו יד ענקית מיתמרת מצוק אדום ואצבעותיה נמסות..." },
+      { id: "1928:2866", artworkId: "tree-landscape", x: 1081, y: 5905, w: 259, h: 356, imgX: 0, imgW: 259, imgH: 337, image: "public/refrence/index-page/גריין/נוף עם עץ.webp", thumb: "public/images/index/idx82.webp", title: "נוף עם עץ", subtitle: "יעקב שטיינהארט, 1960", description: "״נוף עם עץ״ של יעקב שטיינהרדט הוא חיתוך-עץ אקספרסיוניסטי שבו עץ מעוקל ומפותל מיתמר על רקע שמים..." },
+      { id: "1928:2884", artworkId: "lost-subject", x: 849, y: 5951, w: 226, h: 213, imgX: 0, imgW: 226, imgH: 174, image: "public/refrence/index-page/גריין/נושא אבוד.webp", thumb: "public/images/index/idx83.webp", title: "נושא אבוד", subtitle: "אנטולי גורמלי, 1994", description: "היצירה ״נושא אבוד״ נמנית עם סדרת ״מעטפות הגוף״ (Hermetic Lead Bodycases) המוערכות והידועות של אנטוני גורמלי..." },
+      { id: "1928:2805", artworkId: "tumi-knife", x: 422, y: 6135, w: 422, h: 728, imgX: 0, imgW: 422, imgH: 710, image: "public/refrence/index-page/גריין/סכין טומי טקסית.webp", thumb: "public/images/index/idx84.webp", title: "סכין ״טוּמי״ טקסית", subtitle: "200‑600 לספירה", description: "להב מתכת מתרחב במניפה ובראשו דמות אנוש זעירה אוחזת שרביט. כלי טקסי..." },
+      { id: "1928:2789", artworkId: "hoffmann-basket", x: 24, y: 6021, w: 390, h: 548, imgX: 0, imgW: 390, imgH: 528, image: "public/refrence/index-page/גריין/סל ניירות.webp", thumb: "public/images/index/idx85.webp", title: "סל ניירות", subtitle: "יוזף הופמן, 1904", description: "כלי זה הוא דוגמה לסגנונה המוקדם של ״הסדנה הווינאית״ – קבוצת אמנים, אדריכלים ומעצבים שנוסדה ב־1903..." },
+      { id: "1928:2901", artworkId: "discus-thrower", x: 849, y: 6150, w: 226, h: 347, imgX: 0, imgW: 226, imgH: 310, image: "public/refrence/index-page/גריין/ספורט בישראל - זורקת הדיסקוס.webp", thumb: "public/images/index/idx86.webp", title: "זורקת דיסקוס", subtitle: "ליזולטה גרז׳בינה, 1937", description: "צילום ב\"לבן על לבן\" של מתעמלת בתנועת זריקה. גוף נשי בודד מול קיר..." },
+      { id: "1928:2920", artworkId: "sima-ornaments", x: 1081, y: 6264, w: 258, h: 220, imgX: 0, imgW: 258, imgH: 198, image: "public/refrence/index-page/גריין/עיטורי סימה.webp", thumb: "public/images/index/idx87.webp", title: "עיטורי סימה", subtitle: "540 לפנה״ס", description: "ה״סימה״ (Sima) היא רצועת שוליים מעוטרת עשויה טרקוטה, המהווה את השוליים התחתונים או העליונים של גג הרעפים במקדשים ובמבני ציבור בעולם העתיק..." },
+      { id: "1928:2936", artworkId: "nimrod", x: 1349, y: 6335, w: 355, h: 550, imgX: 0, imgW: 355, imgH: 526, previewW: "55vw", previewMaxW: "760px", previewMaxH: "1050px", image: "public/images/index/idx88.webp", thumb: "public/images/index/idx88.webp", title: "נמרוד", subtitle: "יצחק דנציגר, 1939", description: "פסל אבן נובי של דמות צייד עירומה בפרופיל, אחד הסמלים המכוננים של הפיסול הישראלי..." },
+      { id: "1930:2660", artworkId: "spanish-dancer", x: 849, y: 6503, w: 490, h: 648, imgX: 0, imgW: 490, imgH: 623, image: "public/refrence/index-page/גריין/ציור (רקדנית ספרדיה).webp", thumb: "public/images/index/idx89.webp", title: "ציור (רקדנית ספרדייה)", subtitle: "ז׳ואן מירו, 1927", description: "שדה חום עם ענן לבן וצורות שחורות מרחפות מעל. הפשטה לירית, בין דמות..." },
+      { id: "1930:2689", artworkId: "two-women-mural", x: 422, y: 6866, w: 422, h: 780, imgX: 0, imgW: 422, imgH: 761, image: "public/refrence/index-page/גריין/ציור קיר המתאר שתי נשים.webp", thumb: "public/images/index/idx90.webp", title: "ציור קיר מקבר המתאר שתי נשים", subtitle: "המאה ה‑15 לפנה״ס", description: "פרסקו מצרי של שתי דמויות בפרופיל זו מאחורי זו. הכפלה כמעט מדויקת של אותה צורה..." },
+      { id: "1928:2953", artworkId: "engraved-plate", x: 24, y: 6574, w: 390, h: 511, imgX: 0, imgW: 390, imgH: 492, image: "public/refrence/index-page/גריין/צלחת ועליה מגולפים סמלים.webp", thumb: "public/images/index/idx91.webp", title: "צלחת גדולה ועליה מגולפים סמלים", subtitle: "המאה ה‑4 לפנה״ס", description: "צלחת זו מבית שערים היא יחידה במינה מבחינת גודלה ועיטוריה. אף שדגמי העיטור היטשטשו וקשה להבינם..." },
+      { id: "1930:2674", artworkId: "figure-inlays", x: 24, y: 7089, w: 390, h: 404, imgX: 0, imgW: 390, imgH: 385, image: "public/refrence/index-page/גריין/קטעים לשיבוץ בצורת דמויות.webp", thumb: "public/images/index/idx92.webp", title: "קטעים לשיבוץ בצורת דמויות", subtitle: "המאה ה‑15‑13 לפנה״ס", description: "שבע לוחיות חרוטות בדמויות אדם בודדות, פיסות שיבוץ. אוסף של אותו מוטיב חוזר, כל אחד שבר בפני עצמו..." },
+      { id: "1930:2705", artworkId: "atget-hotel", x: 849, y: 7152, w: 490, h: 763, imgX: 0, imgW: 490, imgH: 739, image: "public/refrence/index-page/גריין/רחוב סגייה 16.webp", thumb: "public/images/index/idx93.webp", title: "מלון ד״ארגוז״ (סגייה), רחוב סגייה 16", subtitle: "אז׳ן ז׳אטה, 1900", description: "אז׳ן אטז׳ה (1857–1927) תיעד באלפי צילומים את פריז הישנה ההולכת ונעלמת — רחובות, חצרות, חזיתות ופרטי אדריכלות..." },
+      { id: "1928:2985", artworkId: "mosaic-bowl-rim", x: 1349, y: 6885, w: 355, h: 427, imgX: 0, imgW: 355, imgH: 403, image: "public/refrence/index-page/גריין/שבר שפה של קערת זכוכית פסיפס.webp", thumb: "public/images/index/idx94.webp", title: "שבר שפה של קערת זכוכית פסיפס", subtitle: "המאה ה‑1 לספירה", description: "שבר זה, השייך לשפתה של קערה יוקרתית, מייצג את אחת מטכניקות הייצור המרהיבות והמורכבות ביותר בעולם העתיק..." },
+      { id: "1930:2721", artworkId: "jaffa-gate", x: 1349, y: 7315, w: 355, h: 362, imgX: 0, imgW: 355, imgH: 338, image: "public/refrence/index-page/גריין/שער יפו.webp", thumb: "public/images/index/idx95.webp", title: "שער יפו", subtitle: "לואי דה קלארק, 1859", description: "לואי דהה קלרק, צלם צרפתי צעיר, הצטרף ב-1859 למשלחת לטירות הצלבנים בסוריה, ובהמשך המשיך לבדו לצלם אתרים היסטוריים..." },
+      { id: "1930:2769", artworkId: "sphinx-tablet", x: 1349, y: 7677, w: 355, h: 444, imgX: 0, imgW: 355, imgH: 420, image: "public/refrence/index-page/גריין/שבר לוחית בצורת ספינקס.webp", thumb: "public/images/index/idx96.webp", title: "שבר לוחית בצורת ספינקס", subtitle: "המאה ה‑8 לספריה", description: "שנהב מגולף ובו ראש מחויך עם תלתלים וצווארון רחב. עבודת פיניקית עדינה..." },
+      { id: "1930:2786", artworkId: "beheaded-sun", x: 849, y: 7920, w: 490, h: 363, imgX: 0, imgW: 490, imgH: 339, image: "public/refrence/index-page/גריין/שמש ערופה.webp", thumb: "public/images/index/idx97.webp", title: "שמש ערופה", subtitle: "פייר אלשינסקי, 1971", description: "״שמש ערופה״ הוא הדפס המשלב תחריט במרכז ומסגרת..." },
+      { id: "1930:2754", artworkId: "sun-croton", x: 422, y: 7650, w: 422, h: 415, imgX: 0, imgW: 422, imgH: 396, image: "public/refrence/index-page/גריין/שמש בקרוטון.webp", thumb: "public/images/index/idx98.webp", title: "שמש בקרוטון", subtitle: "אלכסנדר קלדר, 1960", description: "קלדר, מהנדס מכונות בהכשרתו, היה ממציא ה״מובייל״ ומחלוצי האמנות הקינטית..." },
+      { id: "1930:2738", artworkId: "ardon-red-sun", x: 24, y: 7497, w: 390, h: 506, imgX: 0, imgW: 390, imgH: 487, image: "public/refrence/index-page/גריין/שמש אדומה.webp", thumb: "public/images/index/idx99.webp", title: "שמש אדומה", subtitle: "מרדכי ארדון, 1972", description: "״שמש אדומה״ של מרדכי ארדון בנויה על חלוקה אופקית פשוטה..." },
+      { id: "1930:2802", artworkId: "stack-drawer", x: 24, y: 8007, w: 390, h: 671, imgX: 0, imgW: 390, imgH: 649, previewW: "55vw", previewMaxW: "760px", previewMaxH: "1100px", image: "public/refrence/index-page/גריין/שידת מגירות סטאק.webp", thumb: "public/images/index/idx100.webp", title: "שידת מגירות ״סטאק״", subtitle: "שי אלקלעי, 2008", description: "אלקלעי, מעצב ישראלי, הפך את המגירה היומיומית למבנה מגדלי דינמי, שמערער את התפיסה הסטטית והמסודרת של רהיט אחסון..." },
+      { id: "1930:2818", artworkId: "guardsman-relief", x: 422, y: 8069, w: 422, h: 425, imgX: 0, imgW: 422, imgH: 405, image: "public/refrence/index-page/גריין/שבר תבליט המתאר שומר ראש.webp", thumb: "public/images/index/idx101.webp", title: "שבר תבליט המתאר שומר ראש", subtitle: "המאה ה‑5 לפנה״ס", description: "אבן פרסית מאחמנידית ובה פרופיל זקן עם תסרוקת מסולסלת. שבר ארמון, כל הפרטים מצטמצמים לדפוס חוזר של תלתלים..." },
+      { id: "1930:2834", artworkId: "hazor-gate", x: 849, y: 8283, w: 490, h: 418, imgX: 0, imgW: 490, imgH: 395, image: "public/refrence/index-page/גריין/שער מצודה ממלכתי.webp", thumb: "public/images/index/idx102.webp", title: "שער מצודה מלכותית", subtitle: "המאה ה‑9 לפנה״ס", description: "זוהי המחצית הימנית של שער כפול שהיה קבוע בכניסה למצודת חצור בימי המלך אחאב. הוא בנוי אבני גזית מסותתות..." },
+      { id: "1930:2850", artworkId: "sunset-arenys", x: 1349, y: 8121, w: 355, h: 310, imgX: 0, imgW: 355, imgH: 286, image: "public/refrence/index-page/גריין/שקיעה באראניי.webp", thumb: "public/images/index/idx103.webp", title: "שקיעה באראניי", subtitle: "קאמי פיסארו, 1890", description: "בשנת 1884 העתיק פיסארו את מגוריו לכפר הזעיר אראניי ושכר שם בית, לימים רכש בית זה בעזרתו של מונה..." },
+      { id: "1930:2899", artworkId: "one-shot-stool", x: 1349, y: 8432, w: 355, h: 513, imgX: 0, imgW: 355, imgH: 488, image: "public/refrence/index-page/גריין/שרפרף מתקפל one shot.webp", thumb: "public/images/index/idx104.webp", title: "שרפרף מתקפל ״One_Shot״", subtitle: "פטריק ז׳ואן, 2006", description: "אובייקט לבן שנפתח מצורה שטוחה לשרפרף בפיתול ספירלי אחד..." },
+      { id: "1930:2915", artworkId: "two-gymnasts", x: 849, y: 8701, w: 490, h: 755, imgX: 0, imgW: 490, imgH: 733, image: "public/refrence/index-page/גריין/שתי מתעמלות.webp", thumb: "public/images/index/idx105.webp", title: "שתי מתעמלות", subtitle: "ליזולטה גרז׳בינה, 1930", description: "צילום ספיה של שתי דמויות בתנועה זהה על דשא. הכפלה של אותו גוף ואותה תנוחה, מקצב צילומי..." },
+      { id: "1930:2882", artworkId: "ancient-mold-modern-figurine", x: 422, y: 8499, w: 422, h: 344, imgX: 0, imgW: 422, imgH: 324, image: "public/refrence/index-page/גריין/תבנית עתיקה וצלמית מודרנית.webp", thumb: "public/images/index/idx106.webp", title: "תבנית עתיקה וצלמית מודרנית", subtitle: "המאה ה‑14‑13 לספירה", description: "שני אובייקטים זה לצד זה: התבנית המקורית וההטבעה שיצאה ממנה. דימוי כפול של אותה דמות..." },
+      { id: "1930:2866", artworkId: "athena-intaglio", x: 24, y: 8685, w: 390, h: 522, imgX: 0, imgW: 390, imgH: 503, image: "public/refrence/index-page/גריין/תגליף אתנה.webp", thumb: "public/images/index/idx107.webp", title: "תגליף המתאר את אתנה", subtitle: "המאה ה‑1 לספירה", description: "תגליף (אינטָליוֹ) חרוט באבן קרניאול בצורה אובלית..." },
+    ];
+
+    const CARD_CAPTION_GAP = 0;
+    const CARD_CAPTION_LINE_H = 20;
+
+    function layoutCards(cards) {
+      return cards.map((card) => ({ ...card, renderedH: card.h }));
+    }
+    const LAID_OUT_CARDS = layoutCards(CARDS);
+    const LAST_CARD_BOTTOM = Math.max(...LAID_OUT_CARDS.map((c) => c.y + c.renderedH));
+
+    // Same footer-offset derivation as collection-circle.html: relative to
+    // wherever the cards actually end, not a fixed Figma canvas height.
+    const FOOTER_LINKS_TOP = LAST_CARD_BOTTOM + 140;
+    const FOOTER_PARAGRAPH_TOP = FOOTER_LINKS_TOP - 48;
+    const FOOTER_WORDMARK_TOP = FOOTER_LINKS_TOP + 75;
+    const CANVAS_H = FOOTER_WORDMARK_TOP + 170 + 40;
+
+    // Coordinates the tile reveal across every Card: one shared
+    // IntersectionObserver watches all card wrappers, staggering reveals
+    // right-to-left (same convention as collection-circle.html's own
+    // scheduleTileReveal — see its comment for the full rationale,
+    // including the scroll-event backstop for big single-frame jumps).
+    const TILE_STAGGER_MS = 50;
+    const TILE_TRIGGER_FRAC = 0.2;
+    let tileRevealObserver = null;
+    let tileRevealClock = 0;
+    const tileRevealCallbacks = new Map();
+    let scrollListenerAttached = false;
+    let scrollCheckQueued = false;
+
+    function revealTiles(els) {
+      els.sort((a, b) => Number(b.dataset.tileX) - Number(a.dataset.tileX));
+      els.forEach((el) => {
+        tileRevealObserver.unobserve(el);
+        const cb = tileRevealCallbacks.get(el);
+        if (!cb) return;
+        tileRevealCallbacks.delete(el);
+        const now = Date.now();
+        const at = Math.max(now, tileRevealClock + TILE_STAGGER_MS);
+        tileRevealClock = at;
+        setTimeout(cb, at - now);
+      });
+    }
+
+    function checkPendingTiles() {
+      scrollCheckQueued = false;
+      const triggerLine = window.innerHeight * (1 - TILE_TRIGGER_FRAC);
+      const ready = [];
+      tileRevealCallbacks.forEach((_, el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < triggerLine || rect.bottom < 0) ready.push(el);
+      });
+      if (ready.length) revealTiles(ready);
+    }
+
+    function ensureTileScrollBackstop() {
+      if (scrollListenerAttached) return;
+      scrollListenerAttached = true;
+      window.addEventListener(
+        "scroll",
+        () => {
+          if (scrollCheckQueued) return;
+          scrollCheckQueued = true;
+          requestAnimationFrame(checkPendingTiles);
+        },
+        { passive: true }
+      );
+    }
+
+    function scheduleTileReveal(el, onReveal) {
+      ensureTileScrollBackstop();
+      if (!tileRevealObserver) {
+        tileRevealObserver = new IntersectionObserver(
+          (entries) => {
+            const entering = entries.filter((e) => e.isIntersecting).map((e) => e.target);
+            if (entering.length) revealTiles(entering);
+          },
+          { rootMargin: `0px 0px -${TILE_TRIGGER_FRAC * 100}% 0px`, threshold: 0 }
+        );
+      }
+      tileRevealCallbacks.set(el, onReveal);
+      tileRevealObserver.observe(el);
+    }
+
+    // Maps an index tile to its artwork.html detail page, when one exists.
+    // card.artworkId is precomputed (offline, by matching this file's tile
+    // titles against artworks-data.js and every collection-*.html's card
+    // titles, tolerating punctuation/spelling drift between the three) —
+    // see /tmp/index_artwork_map.json generation for the matching logic if
+    // this ever needs to be redone. Not every one of the 107 tiles has a
+    // detail page yet, so unmatched tiles just render without a link.
+    function artworkHrefFor(card) {
+      return card.artworkId ? "artwork.html?id=" + card.artworkId : null;
+    }
+
+    // Remembers exactly where on the grid the user was standing before they
+    // clicked into a detail page, so the browser back button can drop them
+    // back on the same tile instead of resetting to the top of the index.
+    // Restored in App()'s mount effect, gated to actual back/forward
+    // navigations (see there for why). Also remembers which card it was
+    // (indexLastCardId), so that card's <img> can skip loading="lazy" —
+    // without that, a tile far below the fold that native lazy-loading
+    // hadn't fetched yet would flash in empty right after the instant
+    // scroll jump, instead of already being loaded like the rest of the
+    // page appears to be.
+    function goToArtwork(href, cardId) {
+      sessionStorage.setItem("indexScrollY", String(window.scrollY));
+      sessionStorage.setItem("indexLastCardId", cardId);
+      window.location.href = href;
+    }
+
+    const HOVER_OPACITY = 0.35;
+    const HOVER_OPACITY_MS = 50;
+    const TYPEWRITER_CHAR_MS = 4;
+    // Same top-anchored convention as collection-circle.html's own Card:
+    // the description sits just below the image's real visible top edge,
+    // Description overlay: 11px from image top, 11px left / 6px right inset, fills full image height.
+    // Figma Variant3: text node x=11, w=imgW-17, y=348 (near bottom) but h=512 (full text block).
+
+    function Card({ card }) {
+      const [loaded, setLoaded] = useState(false);
+      const [revealed, setRevealed] = useState(false);
+      const [hovered, setHovered] = useState(false);
+      const [settled, setSettled] = useState(false);
+      const wrapperRef = useRef(null);
+
+      useEffect(() => {
+        const el = wrapperRef.current;
+        if (!el) return;
+        scheduleTileReveal(el, () => setRevealed(true));
+      }, []);
+
+      const [typedLength, setTypedLength] = useState(0);
+      useEffect(() => {
+        if (!card.description) return;
+        const typingIn = hovered;
+        const id = setInterval(() => {
+          setTypedLength((n) => {
+            const done = typingIn ? n >= card.description.length : n <= 0;
+            if (done) {
+              clearInterval(id);
+              return n;
+            }
+            return typingIn ? n + 1 : n - 1;
+          });
+        }, TYPEWRITER_CHAR_MS);
+        return () => clearInterval(id);
+      }, [hovered]);
+
+      const isRevealed = loaded && revealed;
+      useEffect(() => {
+        if (!isRevealed) return;
+        const id = setTimeout(() => setSettled(true), TILE_FADE_MS);
+        return () => clearTimeout(id);
+      }, [isRevealed]);
+
+      const artworkHref = artworkHrefFor(card);
+
+      return (
+        <div
+          id={card.thumb.replace(/.*\/(idx\d+)\.jpg.*/, "tile-$1")}
+          ref={wrapperRef}
+          data-tile-x={card.x}
+          className="absolute"
+          style={{
+            left: scalePx(card.x),
+            top: scalePx(card.y),
+            width: scalePx(card.w),
+          }}
+        >
+          {/* Content block: image + caption in flex column, offset by imgX.
+              min-height preserves the Figma-designed tile height as a floor,
+              so the caption zone (h − imgH pixels) is always present and the
+              caption row is vertically centred within it. */}
+          <div style={{
+            marginLeft: scalePx(card.imgX),
+            width: scalePx(card.imgW),
+            minHeight: scalePx(card.h),
+            display: "flex",
+            flexDirection: "column",
+          }}>
+            <img
+              src={card.thumb || card.image}
+              alt={card.title}
+              loading={sessionStorage.getItem("indexLastCardId") === card.id ? "eager" : "lazy"}
+              onLoad={() => setLoaded(true)}
+              className="block pointer-events-none"
+              style={{
+                width: scalePx(card.imgW),
+                height: scalePx(card.imgH),
+                objectFit: "cover",
+                clipPath: "inset(1px)",
+                opacity: !isRevealed ? 0 : hovered ? HOVER_OPACITY : 1,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            />
+            {/* Caption zone: flex: 1 takes the remaining space (h − imgH).
+                paddingTop matches Figma's ~4px image-to-caption gap. */}
+            <div style={{ flex: 1, display: "flex", alignItems: "flex-start", paddingTop: scalePx(4) }}>
+              <div
+                className="caption-container-row"
+                style={{
+                  zIndex: 1,
+                  fontFamily: FONT_THEBASICS,
+                  fontWeight: 500,
+                  fontSize: scalePx(16),
+                  lineHeight: "15px",
+                  letterSpacing: 0,
+                }}
+              >
+                <HoverWord label={card.title} active={hovered} className="caption-title-side" />
+                <HoverWord label={card.subtitle} active={hovered} className="caption-metadata-side" />
+              </div>
+            </div>
+          </div>
+          {/* Hover hitbox: absolutely positioned over the image area. Also
+              the click target into artwork.html, when this tile has a
+              detail page (see artworkHrefFor — not every tile does yet). */}
+          <div
+            className="absolute pointer-events-auto"
+            style={{
+              left: scalePx(card.imgX), top: 0, width: scalePx(card.imgW), height: scalePx(card.imgH),
+              cursor: artworkHref ? "pointer" : undefined,
+            }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            onClick={() => { if (artworkHref) goToArtwork(artworkHref, card.id); }}
+          />
+          {/* Hover description: top-anchored 11px from image top, 11px left / 6px right inset, fills full image height. */}
+          {card.description && (
+            <div
+              className="absolute overflow-hidden pointer-events-none text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(card.imgX + 11),
+                top: scalePx(11),
+                width: scalePx(card.imgW - 17),
+                height: scalePx(card.imgH - 11),
+                fontFamily: FONT_THEBASICS,
+                fontWeight: 500,
+                fontSize: scalePx(16),
+                lineHeight: "121%",
+                color: "#28282a",
+                opacity: isRevealed && (hovered || typedLength > 0) ? 1 : 0,
+                transition: `opacity ${settled ? HOVER_OPACITY_MS : TILE_FADE_MS}ms ease-in`,
+              }}
+            >
+              {card.description.slice(0, typedLength)}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── List view ─────────────────────────────────────────────────────────────
+    // Column widths from Figma header anchors (1728px frame).
+    // Technique/dimensions keyed by card.title, sourced from Figma list instances (node 1271:1348).
+    const LIST_METADATA = {
+      // Figma-verified entries
+      "אוויר, ברזל ומים":                      { technique: "צבעי-שמן על בד",                                    dimensions: "97.4x151.4"     },
+      "אישה ונציאנית מס’ 6":                { technique: "ברונזה, 3/6",                                       dimensions: "132.4x15.5x36.6"},
+      "אף יותר":                                { technique: "צבעי-שמן על בד",                                    dimensions: "69x69"          },
+      "בקבוק דמוי רימון":                       { technique: "זכוכית חומה, מעוצבת על ליבה",                        dimensions: "7.9x6.8"        },
+      "גלגל אופניים":                           { technique: "גלגל אופניים ומזלג מחוברים לשרפרף מטבח לבן",         dimensions: "126.5x63.5x31.8"},
+      "גרפיטי פריזאי":                          { technique: "הדפסת-כסף",                                          dimensions: "28.6x22.2"      },
+      "דיכוי החפץ":                             { technique: "צבעי-שמן על בד",                                    dimensions: "90x116.5"       },
+      "הבשורה למרים":                           { technique: "צבעי-שמן על בד",                                    dimensions: "65x89"          },
+      "הדס לבשמים":                             { technique: "כסף בעבודת פיליגרן, יצוק ומוזהב חלקית",             dimensions: "40x6"           },
+      "השקה":                                   { technique: "צבעי-שמן על בד",                                    dimensions: "228x152"        },
+      "חרוז מתוך מטמון כסף":                    { technique: "אבן קרניאול",                                        dimensions: "0.4x0.7"        },
+      "יריחו תחילה":                            { technique: "אקריליק על בד",                                      dimensions: "27x40 / 160x200"},
+      "כותרת וחוליות עמוד":                     { technique: "אבן גיר קשה",                                        dimensions: "109x62"         },
+      'כיסא ״פסטיל״':                           { technique: "פוליאסטר משוריין בפיברגלס ויצוק בדפוס",             dimensions: "56x95"          },
+      "מבט על וולסטריט מברודווי":               { technique: "הדפסת-כסף",                                          dimensions: "27x35"          },
+      "מגדל שעון":                              { technique: "תצריב",                                               dimensions: "260x185"        },
+      "מראה בעלת ידית סירנה":                  { technique: "ברונזה",                                              dimensions: "25.5x19"        },
+      "משל אופטי":                              { technique: "הדפסת-כסף",                                          dimensions: "23.8x18.2"      },
+      "משקולת פלך":                             { technique: "אבן",                                                 dimensions: "1.3x2.1"        },
+      "נגב":                                    { technique: "אבן גיר",                                             dimensions: "280x3500"       },
+      "שמש ערופה":                              { technique: "הדפס-אבן צבעוני ואקווטינטה צבעונית",                 dimensions: "627x940"        },
+      "שמש בקרוטון":                            { technique: "מתכת צבועה",                                         dimensions: "442x129.2"      },
+      "שמש אדומה":                              { technique: "צבעי–שמן על בד",                                    dimensions: "178x56.5x61.5"  },
+      'שידת מגירות ״סטאק״':                     { technique: "לבנה לבוד צבוע ומצופה לכה, סיבית ופלדה",            dimensions: "178x56.5x61.5"  },
+      "שקיעה באראניי":                          { technique: "צבעי-שמן על בד",                                    dimensions: "65.2x81.3"      },
+      "תגליף המתאר את אתנה":                    { technique: "קרנליאן",                                             dimensions: "1.6x1.3x0.5"   },
+      "צלחת גדולה ועליה מגולפים סמלים":         { technique: "זכוכית ירקרקה, מנופחת וחרותה",                        dimensions: "52"             },
+      // Additional entries
+      "אבן יד":                                 { technique: "צור מסותת",                                           dimensions: "14x9"           },
+      "אגדת מוצא הטוטם":                        { technique: "עץ מגולף וצבוע",                                     dimensions: "205x56"         },
+      "אדם":                                    { technique: "ברונזה",                                              dimensions: "198x72x62"      },
+      "אישה + נֵאון, ניו-יורק":                 { technique: "הדפסת-ג׳לטין כסף",                                   dimensions: "32x22"          },
+      "אלה (אוה)":                              { technique: "עץ עם עיניים משובצות",                               dimensions: "68x10"          },
+      "אלמנה טרייה":                            { technique: "עץ צבוע, זכוכית ועור",                               dimensions: "77.5x44.5x8.5"  },
+      "אני הולך":                               { technique: "צבעי-שמן על בד",                                    dimensions: "97x127"         },
+      "אסמים בלילה":                            { technique: "חיתוך-עץ",                                           dimensions: "30.8x25.1"      },
+      "אתלטיקה קלה":                            { technique: "הדפסת-כסף",                                          dimensions: "23.8x17.5"      },
+      "בלי כותרת (לבוב ופט רום)":              { technique: "נורות אור פלורסנט",                                  dimensions: "244x244x10"     },
+      "עינויי ברתולומאו הקדוש":                 { technique: "צבעי-שמן על בד",                                    dimensions: "110x85"         },
+      "גליוטינה":                               { technique: "צבעי-שמן על בד",                                    dimensions: "167x122"        },
+      "גַנְגָה דֶווי אלת הנהר":                 { technique: "אבן חול",                                            dimensions: "87x35x20"       },
+      "גרזן":                                   { technique: "אבן",                                                 dimensions: "13x6"           },
+      "דגם מבנה":                               { technique: "חרס",                                                 dimensions: "11.2x9x8.5"     },
+      "כנסיית עץ, קרוליינה הדרומית":           { technique: "הדפסת-ג׳לטין כסף",                                   dimensions: "19.2x15.5"      },
+      "החלל הרואה":                             { technique: "התקנה (חלל אור)",                                    dimensions: "500x500x370"    },
+      "הנאהבים":                                { technique: "הדפסת-כסף",                                          dimensions: "23.5x17.5"      },
+      "הנוקם":                                  { technique: "ברונזה",                                              dimensions: "44x59x36"       },
+      "העגל והיכלו":                            { technique: "ברונזה ונחושת",                                      dimensions: "10x4.5"         },
+      "הצד העליון של השמים":                    { technique: "צבעי-שמן על בד",                                    dimensions: "101.6x76.2"     },
+      "השלכות":                                 { technique: "אבן גיר",                                             dimensions: "310x180x80"     },
+      "ונוס משוחזרת":                           { technique: "גבס",                                                 dimensions: "58x18x14"       },
+      "זמן אביב 2":                             { technique: "גבס צבוע",                                           dimensions: "7x30x2"         },
+      "ח׳מר":                                   { technique: "אבן בזלת",                                           dimensions: "84x43x28"       },
+      "חזית חנות":                              { technique: "קולאז׳ ועיפרון על נייר",                             dimensions: "56x71"          },
+      "חלון גג בירושלים":                       { technique: "צבעי-שמן על בד",                                    dimensions: "130x65"         },
+      "חלון הסדנה":                             { technique: "צבעי-שמן על בד",                                    dimensions: "130x96"         },
+      "חרפושית ועליה משרת האל":                 { technique: "סטאטיט מצופה חרסינה",                               dimensions: "1.8x1.3x0.7"   },
+      "טופולוגיה שקופה":                        { technique: "הדפסת-כסף",                                          dimensions: "50x60"          },
+      "טורסו של אפרודיטה":                      { technique: "שיש",                                                dimensions: "22x11"          },
+      "יבול יפה":                               { technique: "צבעי-שמן על בד",                                    dimensions: "54.3x65"        },
+      "ידית בצורת דולפינים":                    { technique: "ברונזה",                                              dimensions: "7.5x4.3"        },
+      "ידית מגל":                               { technique: "עצם",                                                 dimensions: "12.5x2"         },
+      "כד גלילי לגבינה מיובאת ממצרים":         { technique: "חרס",                                                dimensions: "12.5x7.8"       },
+      "כורים במנוחה":                           { technique: "צבעי-שמן על בד",                                    dimensions: "73x100"         },
+      "כיכר הכפר בסרה":                        { technique: "צבעי-שמן על בד",                                    dimensions: "73x60"          },
+      "כלי בצורת דג":                           { technique: "אבן",                                                 dimensions: "12.5x5"         },
+      "כן להצבת פסל אלוהות":                   { technique: "חרס",                                                 dimensions: "45x23"          },
+      'כרזה לסרט ״אקסודוס״':                   { technique: "אופסט",                                               dimensions: "104x70"         },
+      "כתובת ממערת קבורה":                      { technique: "אבן גיר",                                            dimensions: "32x22"          },
+      'לוח אבות קדמונים (״גוֹפֶּה״)':          { technique: "עץ מגולף וצבוע",                                     dimensions: "160x28"         },
+      'לוח חלון ״עין השור״':                    { technique: "זכוכית",                                              dimensions: "22"             },
+      "לוחית המתארת את האלים ננה ונינגל":       { technique: "חימר",                                               dimensions: "6.2x4.5"        },
+      "לוחית המתארת שורת לוחמים":               { technique: "טרקוטה צבועה",                                       dimensions: "18x12"          },
+      "לוליין עומד על ידיו על תוף":             { technique: "עץ צבוע",                                            dimensions: "15x6x6"         },
+      "ללא כותרת":                              { technique: "צבעי-שמן על בד",                                    dimensions: "240x174"        },
+      "מאבו":                                   { technique: "הדפסת-כסף",                                          dimensions: "20.3x25.4"      },
+      "מגדל מים בנהלל":                         { technique: "הדפסת-כסף",                                          dimensions: "23x18"          },
+      "מגדל רדיו":                              { technique: "הדפסת-כסף",                                          dimensions: "33.5x26.5"      },
+      "מחווה לרובע הביגוד":                     { technique: "בטון ואקומולציה",                                    dimensions: "130x25x25"      },
+      'מחווה לריבוע מס״ 853':                   { technique: "צבעי-שמן על מזוניט",                                 dimensions: "40.6x40.6"      },
+      "מחסה ארעי למהגרי עבודה בארקנסו":        { technique: "הדפסת-ג׳לטין כסף",                                   dimensions: "20.5x25.8"      },
+      "מלכה":                                   { technique: "מתכת צבועה",                                         dimensions: "170x90x90"      },
+      'מנורת ״ירח״':                            { technique: "מתכת",                                               dimensions: "40"             },
+      "מסה סוראליסטית":                         { technique: "גואש על נייר",                                       dimensions: "21.5x26.5"      },
+      "מסכת חזה בדמות צדודית":                  { technique: "אבן ירוקה",                                          dimensions: "4.5x3.5"        },
+      "מצבת בן מגלוס":                          { technique: "שיש",                                                dimensions: "65x35x8"        },
+      'מתווה ל״התעברות ללא רבב״':               { technique: "עיפרון ועט על נייר",                                 dimensions: "21x27"          },
+      "נהר האלבה בדרזדן":                       { technique: "צבעי-שמן על בד",                                    dimensions: "70x100"         },
+      "נוף סוראליסטי":                          { technique: "צבעי-שמן על בד",                                    dimensions: "89x65"          },
+      "נוף עם עץ":                              { technique: "חיתוך-עץ",                                           dimensions: "42x30"          },
+      "נושא אבוד":                              { technique: "עופרת",                                               dimensions: "189x53x29"      },
+      'סכין ״טוּמי״ טקסית':                    { technique: "זהב",                                                dimensions: "30.5x14"        },
+      "סל ניירות":                              { technique: "מתכת",                                               dimensions: "19.5x22.5"      },
+      "זורקת דיסקוס":                           { technique: "הדפסת-כסף",                                          dimensions: "24x17.5"        },
+      "עיטורי סימה":                            { technique: "טרקוטה צבועה",                                       dimensions: "86x28"          },
+      "נמרוד":                                  { technique: "אבן נובית",                                           dimensions: "94x50x43"       },
+      "ציור (רקדנית ספרדייה)":                  { technique: "צבעי-שמן על בד",                                    dimensions: "97x81"          },
+      "ציור קיר מקבר המתאר שתי נשים":          { technique: "פרסקו על טיח",                                       dimensions: "38x45"          },
+      "קטעים לשיבוץ בצורת דמויות":              { technique: "שנהב",                                               dimensions: "5x2.5"          },
+      'מלון ד״ארגוז״ (סגייה), רחוב סגייה 16': { technique: "הדפסת-אלבומן",                                       dimensions: "17.9x22.9"      },
+      "שבר שפה של קערת זכוכית פסיפס":          { technique: "זכוכית פסיפס",                                       dimensions: "8.5x4x0.5"      },
+      "שער יפו":                                { technique: "הדפסת-אלבומן",                                       dimensions: "20x25"          },
+      "שבר לוחית בצורת ספינקס":                { technique: "שנהב",                                               dimensions: "5.5x8.5x0.5"   },
+      "שבר תבליט המתאר שומר ראש":              { technique: "אבן גיר",                                            dimensions: "12x9"           },
+      "שער מצודה מלכותית":                      { technique: "בזלת",                                               dimensions: "245x195x50"     },
+      'שרפרף מתקפל ״One_Shot״':                { technique: "פוליפרופילן",                                        dimensions: "45x33x45"       },
+      "שתי מתעמלות":                            { technique: "הדפסת-כסף",                                          dimensions: "22.7x17.3"      },
+      "תבנית עתיקה וצלמית מודרנית":             { technique: "חרס",                                                dimensions: "11x4"           },
+    };
+
+    const LIST_COLS = [
+      { key: "title",      width: "26.74%", align: "right" },
+      { key: "subtitle",   width: "21%",    align: "right" },
+      { key: "technique",  width: "43.81%", align: "right" },
+      { key: "dimensions", width: "8.45%",  align: "left"  },
+    ];
+
+    function ListRow({ card, cardIdx, onRowEnter, onRowLeave }) {
+      const [hovered, setHovered] = useState(false);
+      const meta = LIST_METADATA[card.title] || {};
+      const rowRef = useRef(null);
+      const artworkHref = artworkHrefFor(card);
+      return (
+        <div
+          ref={rowRef}
+          dir="rtl"
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            minHeight: scalePx(47),
+            padding: `${scalePx(10)} 0`,
+            cursor: artworkHref ? "pointer" : undefined,
+          }}
+          onMouseEnter={() => { setHovered(true); onRowEnter && onRowEnter(card.image, rowRef.current, cardIdx); }}
+          onMouseLeave={() => { setHovered(false); onRowLeave && onRowLeave(cardIdx); }}
+          onClick={() => { if (artworkHref) goToArtwork(artworkHref, card.id); }}
+        >
+          {/* Title — Masada 24px, rightmost column */}
+          <div
+            style={{ width: LIST_COLS[0].width, paddingRight: scalePx(8), textAlign: "right", flexShrink: 0 }}
+          >
+            <HoverWord
+              label={card.title}
+              active={hovered}
+              style={{ fontFamily: FONT_MASADA, fontSize: scalePx(24), letterSpacing: "0.02em", lineHeight: 1.85 }}
+            />
+          </div>
+          {/* Creator / Date */}
+          <div style={{ width: LIST_COLS[1].width, textAlign: "right", flexShrink: 0, fontFamily: FONT_THEBASICS, fontWeight: 500, fontSize: scalePx(20), letterSpacing: "0.4px", lineHeight: 1.85 }}>
+            <HoverWord label={card.subtitle} active={hovered} />
+          </div>
+          {/* Technique */}
+          <div style={{ width: LIST_COLS[2].width, textAlign: "right", flexShrink: 0, fontFamily: FONT_THEBASICS, fontWeight: 500, fontSize: scalePx(20), letterSpacing: "0.4px", lineHeight: 1.85 }}>
+            {meta.technique && <HoverWord label={meta.technique} active={hovered} />}
+          </div>
+          {/* Dimensions (ס"מ) — leftmost column, left-aligned, no wrap */}
+          <div className="list-dim-cell" style={{ width: LIST_COLS[3].width, flexShrink: 0, fontFamily: FONT_THEBASICS, fontWeight: 500, fontSize: scalePx(20), letterSpacing: "0.4px", lineHeight: 1.85 }}>
+            {meta.dimensions && <HoverWord label={meta.dimensions} active={hovered} />}
+          </div>
+        </div>
+      );
+    }
+
+    // Editorial position slots — each slot defines left offset and vertical
+    // displacement from the hovered row's center, cycling by card index.
+    const PREVIEW_SLOTS = [
+      { left: "3vw",  dy: -180 },
+      { left: "22vw", dy:  -20 },
+      { left: "8vw",  dy: -280 },
+      { left: "17vw", dy:   60 },
+      { left: "1vw",  dy:  -90 },
+      { left: "26vw", dy: -200 },
+      { left: "11vw", dy:  100 },
+      { left: "20vw", dy: -120 },
+    ];
+
+    const CLUSTER_MAX = 5;
+
+    // Size tiers: sm → lg
+    const SIZE_TIERS = [
+      { w: "38vw", minW: "580px", maxW: "625px", maxH: "82vh" },  // sm
+      { w: "44vw", minW: "680px", maxW: "725px", maxH: "82vh" },  // md
+      { w: "39vw", minW: "595px", maxW: "640px", maxH: "82vh" },  // sm+
+      { w: "52vw", minW: "790px", maxW: "860px", maxH: "82vh" },  // lg
+      { w: "46vw", minW: "705px", maxW: "750px", maxH: "82vh" },  // md+
+      { w: "38vw", minW: "585px", maxW: "630px", maxH: "82vh" },  // sm
+      { w: "54vw", minW: "810px", maxW: "880px", maxH: "82vh" },  // lg+
+      { w: "40vw", minW: "610px", maxW: "655px", maxH: "82vh" },  // sm-md
+      { w: "45vw", minW: "690px", maxW: "735px", maxH: "82vh" },  // md
+      { w: "39vw", minW: "600px", maxW: "642px", maxH: "82vh" },  // sm+
+      { w: "50vw", minW: "760px", maxW: "830px", maxH: "82vh" },  // lg
+      { w: "48vw", minW: "730px", maxW: "790px", maxH: "82vh" },  // md-lg
+    ];
+
+    function ListView() {
+      const HEADER_LABELS = ["שם היצירה", "יוצר/ת", "טכניקה", `מימדים (ס"מ)`];
+      const clusterRef = useRef(new Map()); // idx → { el, hideTimer }
+
+      useEffect(() => {
+        return () => {
+          clusterRef.current.forEach(({ el, hideTimer }) => {
+            clearTimeout(hideTimer);
+            el.remove();
+          });
+          clusterRef.current.clear();
+        };
+      }, []);
+
+      const handleRowEnter = useCallback((src, rowEl, idx) => {
+        const cluster = clusterRef.current;
+        const existing = cluster.get(idx);
+        if (existing) {
+          clearTimeout(existing.hideTimer);
+          existing.el.classList.remove("leaving");
+          return;
+        }
+        const slot = PREVIEW_SLOTS[idx % PREVIEW_SLOTS.length];
+        let top = 80;
+        if (rowEl) {
+          const r = rowEl.getBoundingClientRect();
+          top = Math.max(8, Math.min(r.top + r.height / 2 + slot.dy, window.innerHeight - 520));
+        }
+        const el = document.createElement("div");
+        el.className = "artwork-cluster-img";
+        el.style.cssText = `position:fixed;pointer-events:auto;z-index:9999;left:${slot.left};top:${top}px;opacity:0;transform:scale(0.96);transition:opacity 120ms cubic-bezier(0.16,1,0.3,1),transform 120ms cubic-bezier(0.16,1,0.3,1);background:none;border:none;outline:none;box-shadow:none;filter:none;cursor:default;`;
+        const img = document.createElement("img");
+        img.alt = "";
+        img.src = src;
+        const card = CARDS[idx];
+        const tier = SIZE_TIERS[(idx * 5 + Math.floor(idx / 3)) % SIZE_TIERS.length];
+        const pW = card?.previewW || tier.w;
+        const pMinW = card?.previewMinW || tier.minW;
+        const pMaxW = card?.previewMaxW || tier.maxW;
+        const pMaxH = card?.previewMaxH || tier.maxH;
+        const pFit = card?.previewFit || "contain";
+        const pAspect = card?.previewAspect ? `aspect-ratio:${card.previewAspect};` : "";
+        const pTransform = card?.previewTransform || "";
+        img.style.cssText = `width:${pW};min-width:${pMinW};max-width:${pMaxW};max-height:${pMaxH};${pAspect}object-fit:${pFit};display:block;background:none;background-color:transparent;border:none;border-color:transparent;outline:none;box-shadow:none;filter:none;mix-blend-mode:multiply;pointer-events:none;${pTransform ? `transform:${pTransform};transform-origin:center center;` : ""}`;
+        el.appendChild(img);
+        document.body.appendChild(el);
+        requestAnimationFrame(() => { el.style.opacity = "1"; el.style.transform = "scale(1)"; });
+        // Keep image visible while cursor is over it
+        el.addEventListener("mouseenter", () => {
+          const entry = clusterRef.current.get(idx);
+          if (entry) clearTimeout(entry.hideTimer);
+        });
+        el.addEventListener("mouseleave", () => handleRowLeave(idx));
+        cluster.set(idx, { el, hideTimer: null });
+        if (cluster.size > CLUSTER_MAX) {
+          const oldest = cluster.keys().next().value;
+          const old = cluster.get(oldest);
+          clearTimeout(old.hideTimer);
+          old.el.remove();
+          cluster.delete(oldest);
+        }
+      }, []);
+
+      const handleRowLeave = useCallback((idx) => {
+        const cluster = clusterRef.current;
+        const entry = cluster.get(idx);
+        if (!entry) return;
+        const timer = setTimeout(() => {
+          entry.el.style.transition = "opacity 100ms ease-out";
+          entry.el.style.opacity = "0";
+          setTimeout(() => { entry.el.remove(); cluster.delete(idx); }, 100);
+        }, 500);
+        entry.hideTimer = timer;
+      }, []);
+
+      return (
+        <>
+          <div
+            dir="rtl"
+            style={{
+              paddingTop: scalePx(155),
+              paddingLeft: scalePx(24),
+              paddingRight: scalePx(24),
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              color: "#28282a",
+            }}
+          >
+            {/* Column header row */}
+            <div
+              dir="rtl"
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                paddingBottom: scalePx(8),
+                paddingTop: scalePx(8),
+                fontSize: scalePx(20),
+                letterSpacing: "0.4px",
+                lineHeight: 1.85,
+                color: "rgba(40,40,42,0.7)",
+              }}
+            >
+              {LIST_COLS.map((col, i) => (
+                <div key={col.key} style={{ width: col.width, textAlign: col.align, flexShrink: 0 }}>
+                  {HEADER_LABELS[i]}
+                </div>
+              ))}
+            </div>
+
+            {/* Artwork rows */}
+            {CARDS.map((card, idx) => (
+              <ListRow key={card.id} card={card} cardIdx={idx} onRowEnter={handleRowEnter} onRowLeave={handleRowLeave} />
+            ))}
+          </div>
+
+          {/* Footer — identical absolute layout to grid footer */}
+          <div style={{ position: "relative", height: scalePx(333), marginTop: scalePx(140), overflow: "hidden" }}>
+            <div
+              id="ci-footer-about-list"
+              className="absolute"
+              style={{
+                left: scalePx(167),
+                top: scalePx(48),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+              }}
+            >
+              <NavLink label="אודות" href="about.html" />
+            </div>
+            <div
+              id="ci-footer-contact-list"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(-128),
+                top: scalePx(48),
+                width: scalePx(240),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+              }}
+            >
+              <NavLink label="יצירת קשר" href="#contact" />
+            </div>
+            <p
+              id="ci-footer-paragraph-list"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                right: scalePx(23),
+                top: 0,
+                width: scalePx(875),
+                fontWeight: 500,
+                fontSize: scalePx(20),
+                lineHeight: 1.21,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              <span style={{ fontFamily: FONT_MASADA }}>אוספי מוזיאון ישראל</span>
+              <span style={{ fontFamily: FONT_THEBASICS }}> מונים כ-500 אלף פריטים המשתרעים על כל קשת התרבות החומרית, מהפרהיסטוריה ועד ימינו. האוסף מאורגן בשלושה אגפים מרכזיים — ארכאולוגיה, אמנות, ואמנות יהודית — וכולל את האחזקות הגדולות בעולם של ארכאולוגיה מקראית וארץ-ישראלית, לצד אמנות יפה, צילום, עיצוב, אתנוגרפיה וחפצי פולחן.</span>
+            </p>
+            <AnimatedFooterWordmark
+              id="ci-footer-wordmark-list"
+              style={{
+                left: scalePx(24),
+                top: scalePx(123),
+                width: scalePx(1679),
+                height: scalePx(170),
+              }}
+            />
+          </div>
+        </>
+      );
+    }
+    // ── End list view ──────────────────────────────────────────────────────────
+
+    function App() {
+      const [pageFadeIn, setPageFadeIn] = useState(false);
+      const [searchOpen, setSearchOpen] = useState(false);
+      const [view, setView] = useState(() => localStorage.getItem("im-view") || "grid");
+      const setViewPersist = useCallback(v => { localStorage.setItem("im-view", v); setView(v); }, []);
+      useEffect(() => {
+        const id = setTimeout(() => setPageFadeIn(true), 60);
+        return () => clearTimeout(id);
+      }, []);
+
+      // Restore the scroll position saved by goToArtwork() — but only when
+      // this load is an actual browser back/forward navigation, not a fresh
+      // arrival via the אינדקס nav link (which should land at the top like
+      // normal). Card layout is fixed-pixel (not image-load-dependent), so
+      // the scroll target is valid immediately, no need to wait for content.
+      useEffect(() => {
+        const navEntry = performance.getEntriesByType("navigation")[0];
+        const isBackForward = navEntry
+          ? navEntry.type === "back_forward"
+          : performance.navigation && performance.navigation.type === 2;
+        if (!isBackForward) return;
+        const saved = sessionStorage.getItem("indexScrollY");
+        if (saved == null) return;
+        const y = Number(saved);
+        if (!Number.isFinite(y)) return;
+        requestAnimationFrame(() => window.scrollTo(0, y));
+      }, []);
+
+      return (
+        <div className="min-h-screen w-full bg-[#fffdfa] relative" dir="rtl">
+          {/* Fixed header overlay — nav (left), wordmark (right), view
+              toggle just below the wordmark (right) — pinned to the
+              viewport, doesn't scroll with the grid. */}
+          <div id="ci-header-overlay" className="fixed inset-x-0 top-0 z-30 flex justify-center pointer-events-none">
+            <div className={"relative " + CANVAS_W}>
+              <div className="absolute pointer-events-auto" style={{ insetInlineEnd: scalePx(24), top: scalePx(32) }}>
+                <IndexTopNav onSearchToggle={() => setSearchOpen((v) => !v)} />
+              </div>
+              <HeaderWordmarkLink style={{ right: scalePx(24), top: scalePx(31), width: scalePx(247), height: scalePx(25) }} />
+              <ViewToggle style={{ right: scalePx(24), top: scalePx(106) }} view={view} setView={(v) => { setViewPersist(v); if (v !== view) window.scrollTo(0, 0); }} />
+              <SearchBar open={searchOpen} onClose={() => setSearchOpen(false)} />
+            </div>
+          </div>
+
+          <div
+            id="ci-canvas"
+            className={"relative mx-auto " + CANVAS_W}
+            style={{
+              height: scalePx(CANVAS_H),
+              overflow: "clip",
+              opacity: pageFadeIn ? 1 : 0,
+              transition: "opacity 500ms ease",
+              display: view === "grid" ? undefined : "none",
+            }}
+          >
+            {LAID_OUT_CARDS.map((card) => (
+              <Card key={card.id} card={card} />
+            ))}
+
+            {/* Footer — identical אודות / יצירת קשר + about-copy + animated
+                wordmark pattern as collection-circle.html's own footer. */}
+            <div
+              id="ci-footer-about"
+              className="absolute"
+              style={{
+                left: scalePx(167),
+                top: scalePx(FOOTER_LINKS_TOP),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+              }}
+            >
+              <NavLink label="אודות" href="about.html" />
+            </div>
+            <div
+              id="ci-footer-contact"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(-128),
+                top: scalePx(FOOTER_LINKS_TOP),
+                width: scalePx(240),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+              }}
+            >
+              <NavLink label="יצירת קשר" href="#contact" />
+            </div>
+            <p
+              id="ci-footer-paragraph"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                right: scalePx(23),
+                top: scalePx(FOOTER_PARAGRAPH_TOP),
+                width: scalePx(875),
+                fontWeight: 500,
+                fontSize: scalePx(20),
+                lineHeight: 1.21,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              <span style={{ fontFamily: FONT_MASADA }}>אוספי מוזיאון ישראל</span>
+              <span style={{ fontFamily: FONT_THEBASICS }}> מונים כ-500 אלף פריטים המשתרעים על כל קשת התרבות החומרית, מהפרהיסטוריה ועד ימינו. האוסף מאורגן בשלושה אגפים מרכזיים — ארכאולוגיה, אמנות, ואמנות יהודית — וכולל את האחזקות הגדולות בעולם של ארכאולוגיה מקראית וארץ-ישראלית, לצד אמנות יפה, צילום, עיצוב, אתנוגרפיה וחפצי פולחן.</span>
+            </p>
+            <AnimatedFooterWordmark
+              id="ci-footer-wordmark"
+              style={{
+                left: scalePx(24),
+                top: scalePx(FOOTER_WORDMARK_TOP),
+                width: scalePx(1679),
+                height: scalePx(170),
+              }}
+            />
+          </div>
+
+          {/* List view — rendered alongside grid, toggled via display */}
+          {view === "list" && (
+            <div
+              className={"mx-auto " + CANVAS_W}
+              style={{
+                opacity: pageFadeIn ? 1 : 0,
+                transition: "opacity 500ms ease",
+              }}
+            >
+              <ListView />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+
+  <script>
+  /* Cursor-proximity transition speed system.
+     Each tile gets --hover-speed updated every rAF frame via lerp.
+     Closer tiles → faster opacity transitions; further tiles → slower. */
+  (function () {
+    var mouseX = -9999, mouseY = -9999;
+    var SPEED_NEAR = 50;   // ms at cursor position
+    var SPEED_FAR  = 500;  // ms far from cursor
+    var MAX_DIST   = 700;  // px — distance at which SPEED_FAR is fully reached
+    var LERP_K     = 0.08; // per-frame factor (~700ms to fully settle)
+
+    var tiles  = null;
+    var speeds = [];
+
+    document.addEventListener('mousemove', function (e) {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    }, { passive: true });
+
+    document.addEventListener('mouseleave', function () {
+      mouseX = -9999;
+      mouseY = -9999;
+    }, { passive: true });
+
+    function tick() {
+      // Lazy-init: wait until React has rendered the tile elements
+      if (!tiles) {
+        var found = document.querySelectorAll('[id^="tile-idx"]');
+        if (!found.length) { requestAnimationFrame(tick); return; }
+        tiles = Array.from(found);
+        speeds = new Array(tiles.length).fill(SPEED_FAR);
+      }
+
+      // Phase 1: batch-read all rects to avoid layout thrashing
+      var rects = new Array(tiles.length);
+      for (var i = 0; i < tiles.length; i++) {
+        rects[i] = tiles[i].getBoundingClientRect();
+      }
+
+      // Phase 2: compute target speed, lerp, write CSS custom property
+      for (var i = 0; i < tiles.length; i++) {
+        var r = rects[i];
+        var nx = mouseX < r.left ? r.left : mouseX > r.right  ? r.right  : mouseX;
+        var ny = mouseY < r.top  ? r.top  : mouseY > r.bottom ? r.bottom : mouseY;
+        var dx = mouseX - nx, dy = mouseY - ny;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var t = dist < MAX_DIST ? dist / MAX_DIST : 1;
+        var target = SPEED_NEAR + (SPEED_FAR - SPEED_NEAR) * t;
+        speeds[i] = speeds[i] + (target - speeds[i]) * LERP_K;
+        tiles[i].style.setProperty('--hover-speed', (speeds[i] | 0) + 'ms');
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  })();
+  </script>
+</body>
+</html>

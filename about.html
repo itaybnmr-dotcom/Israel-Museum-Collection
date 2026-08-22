@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>אוספי מוזיאון ישראל</title>
+  <meta name="description" content="מידע על אוספי מוזיאון ישראל — כ-500 אלף פריטים מארכיאולוגיה, אמנות ואמנות יהודית, המוצגים באתר בחלוקה לחמש אסופות נושאיות." />
+  <link rel="icon" type="image/svg+xml" href="public/images/favicon.svg" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="artworks-data.js"></script>
+  <script src="search-engine.js"></script>
+  <style>
+    @view-transition {
+      navigation: auto;
+    }
+    ::view-transition-group(root) {
+      animation-duration: 0.42s;
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      mix-blend-mode: normal;
+    }
+    /* The nav bar carries a persistent view-transition-name (site-header) so
+       it morphs instead of cross-fading — but the browser still runs its
+       default old/new fade *underneath* that morph, and since the two
+       snapshots are almost-but-not-quite pixel-identical (font hinting,
+       subpixel rounding) that reads as a flicker. Freezing it removes that. */
+    ::view-transition-old(site-header),
+    ::view-transition-new(site-header) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+    /* Also freeze the group's own position/size interpolation — otherwise
+       even a 1px geometry mismatch between two pages' headers (they're
+       hand-tuned per page) makes it visibly slide during the crossfade. */
+    ::view-transition-group(site-header) {
+      animation: none;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'TheBasics';
+      src: url('public/fonts/TheBasics-Bold.otf') format('opentype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Masada';
+      src: url('public/fonts/Masada-Medium.otf') format('opentype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html, body {
+      background-color: #fffdfa;
+      color: #28282a;
+      font-family: 'TheBasics', 'Segoe UI', Arial, sans-serif;
+      font-weight: 500;
+    }
+
+    ::selection {
+      background-color: #28282a;
+      color: #fffdfa;
+    }
+  </style>
+</head>
+<body>
+  <!-- Static, JS-free header: React/ReactDOM/Babel-standalone all load from a
+       CDN and the whole page script has to be parsed and transpiled before
+       React paints anything, so on every navigation there's a real gap where
+       the document is blank and the nav bar vanishes. This markup needs no
+       JS at all, so it paints on the very first frame and carries the
+       site-header view-transition name itself (the React-rendered header
+       below no longer claims it — a name can only be claimed by one element
+       at a time). It sits one z-index below the real header and is never
+       removed; once React mounts, its own header simply covers this one, so
+       there's no visible swap — as long as both agree on exact geometry
+       (right/top/width/height/gap below), which is why those are hardcoded
+       to match every page's own HeaderWordmarkLink/TopNav values exactly
+       rather than copy-pasted loosely. -->
+  <div style="position:fixed;inset-inline:0;top:0;z-index:29;display:flex;justify-content:center;pointer-events:none;view-transition-name:site-header;">
+    <div dir="rtl" style="position:relative;width:min(1728px,100vw);">
+      <a href="index.html" style="position:absolute;right:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.017940);width:calc(min(1728px,100vw) * 0.142940);height:calc(min(1728px,100vw) * 0.014468);pointer-events:auto;display:block;">
+        <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style="width:100%;height:100%;display:block;" />
+      </a>
+      <nav dir="rtl" style="position:absolute;inset-inline-end:calc(min(1728px,100vw) * 0.013889);top:calc(min(1728px,100vw) * 0.018519);display:flex;align-items:center;gap:20px;pointer-events:auto;font-family:'TheBasics','Segoe UI',Arial,sans-serif;font-weight:500;font-size:calc(min(1728px,100vw) * 0.011574);letter-spacing:0.2px;">
+        <a href="index.html#about" style="color:#28282a;text-decoration:none;">אסופות</a>
+        <a href="collection-index.html" style="color:#28282a;text-decoration:none;">אינדקס</a>
+        <a href="search.html" style="color:#28282a;text-decoration:none;">חיפוש</a>
+        <a href="about.html" style="color:#28282a;text-decoration:none;">אודות</a>
+      </nav>
+    </div>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useRef, useEffect } = React;
+
+    const FONT_THEBASICS = "TheBasics, \"Segoe UI\", Arial, sans-serif";
+    const FONT_MASADA = "Masada, \"Segoe UI\", Arial, sans-serif";
+
+    const HERO_VIDEOS = [
+      "public/videos/circle_1.mp4",
+      "public/videos/vertical_landscape.mp4",
+      "public/videos/window_1.mp4",
+      "public/videos/motion.mp4",
+      "public/videos/shard_1.mp4",
+    ];
+
+    const WORDMARK_HOVER_FADE_MS = 200;
+
+    // Same header-brand link used on every other page: hovering plays a
+    // random hero reel behind it, clicking hands off to index.html's hero
+    // via the same skipIntro/heroVideo sessionStorage flags.
+    function HeaderWordmarkLink({ style }) {
+      const [video, setVideo] = useState(null);
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (video) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          closeTimer.current = setTimeout(() => setMounted(false), WORDMARK_HOVER_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [video]);
+
+      return (
+        <a
+          href="index.html"
+          className="absolute pointer-events-auto"
+          style={{ ...style, zIndex: 41 }}
+          onMouseEnter={() => setVideo(HERO_VIDEOS[Math.floor(Math.random() * HERO_VIDEOS.length)])}
+          onMouseLeave={() => setVideo(null)}
+          onClick={() => {
+            if (video) sessionStorage.setItem("heroVideo", video);
+          }}
+        >
+          <img src="public/images/wordmark.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%", display: "block", position: "relative", zIndex: 2 }} />
+          {mounted && (
+            <div
+              className="fixed inset-0 overflow-hidden pointer-events-none"
+              style={{ zIndex: 1, opacity: visible ? 1 : 0, transition: `opacity ${WORDMARK_HOVER_FADE_MS}ms ease` }}
+            >
+              <video key={video} src={video} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+            </div>
+          )}
+        </a>
+      );
+    }
+
+    const WORDMARK_ICONS = [
+      "public/images/icon-circle.svg",
+      "public/images/icon-verticality.svg",
+      "public/images/icon-gate.svg",
+      "public/images/icon-motion.svg",
+      "public/images/icon-fragment.svg",
+    ];
+    const WORDMARK_ICON_SLOTS = [
+      { left: 1135.5, top: 30.3, width: 122.4, height: 118.9 },
+      { left: 475.3, top: 30.3, width: 117.4, height: 118.9 },
+    ];
+    const WORDMARK_ICON_INTERVAL_MS = 200;
+
+    function AnimatedFooterWordmark({ style, id }) {
+      const [tick, setTick] = useState(0);
+      useEffect(() => {
+        const t = setInterval(() => setTick((n) => n + 1), WORDMARK_ICON_INTERVAL_MS);
+        return () => clearInterval(t);
+      }, []);
+      return (
+        <div id={id} className="absolute" style={{ ...style, position: "absolute" }}>
+          <img src="public/images/wordmark-blank.svg" alt="אוספי מוזיאון ישראל" style={{ width: "100%", height: "100%" }} />
+          {WORDMARK_ICON_SLOTS.map((slot, i) => (
+            <img
+              key={i}
+              src={WORDMARK_ICONS[(tick + i * 2) % WORDMARK_ICONS.length]}
+              alt=""
+              aria-hidden="true"
+              style={{ position: "absolute", objectFit: "contain", left: scalePx(slot.left), top: scalePx(slot.top), width: scalePx(slot.width), height: scalePx(slot.height) }}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    const UNDERLINE_OFFSET = "0.08em";
+    const UNDERLINE_THICKNESS = "0.1em";
+    const CURRENT_UNDERLINE = {
+      textDecorationLine: "underline",
+      textDecorationColor: "#28282a",
+      textDecorationThickness: UNDERLINE_THICKNESS,
+      textUnderlineOffset: UNDERLINE_OFFSET,
+      textDecorationSkipInk: "auto",
+    };
+
+    const FRAME_W = 1728;
+    const scalePx = (px) => `calc(min(${FRAME_W}px, 100vw) * ${(px / FRAME_W).toFixed(6)})`;
+    const CANVAS_W = "w-[1728px] max-w-full";
+
+    const NAV_ITEMS = [
+      { label: "אינדקס", href: "collection-index.html" },
+      { label: "חיפוש", href: "#search" },
+    ];
+
+    function NavLink({ label, href, onClick }) {
+      const [visible, setVisible] = useState(false);
+      const [origin, setOrigin] = useState("right");
+      const [resetKey, setResetKey] = useState(0);
+      const rafIds = useRef([]);
+
+      function clearRafs() {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+      }
+      function handleEnter() {
+        // Clicking a focusable link fires onFocus even though the mouse
+        // never left — without this guard that replays the whole closed-
+        // then-sweep-in animation as a visible glitch right at the click.
+        if (visible) return;
+        clearRafs();
+        setOrigin("right");
+        setVisible(false);
+        setResetKey((k) => k + 1);
+        rafIds.current.push(requestAnimationFrame(() => {
+          rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+        }));
+      }
+      function handleLeave() {
+        clearRafs();
+        setOrigin("left");
+        setVisible(false);
+      }
+      const clipPath = visible ? "inset(0 0 0 0)" : origin === "right" ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)";
+
+      return (
+        <a
+          href={href}
+          onClick={onClick}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          onFocus={handleEnter}
+          onBlur={handleLeave}
+          className="relative inline-block text-[#28282a]"
+          style={{ textDecoration: "none" }}
+        >
+          {label}
+          <span
+            key={resetKey}
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              color: "transparent",
+              ...CURRENT_UNDERLINE,
+              clipPath,
+              transition: "clip-path 0.16s ease",
+            }}
+          >
+            {label}
+          </span>
+        </a>
+      );
+    }
+
+    // Every other page underlines "אסופות" permanently (it's the section
+    // they all belong to) and leaves "אודות" a plain sibling link. This is
+    // the one page where that's reversed: "אודות" is the permanent/current
+    // label, "אסופות" goes back to being a normal hover link to the
+    // homepage's collections section.
+    function TopNav({ onSearchToggle }) {
+      return (
+        <nav
+          id="ab-nav"
+          className="flex items-center gap-5 pointer-events-auto"
+          dir="rtl"
+          style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(20), letterSpacing: "0.2px" }}
+        >
+          <NavLink
+            label="אסופות"
+            href="index.html#about"
+            onClick={() => {
+              sessionStorage.setItem("skipIntro", "1");
+              sessionStorage.setItem("scrollToAbout", "1");
+            }}
+          />
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.label}
+              label={item.label}
+              href={item.href}
+              // "חיפוש" doesn't navigate — it toggles the search bar (see
+              // SearchBar/App). stopPropagation keeps this same click from
+              // also being seen by SearchBar's document-level away-listener,
+              // which would otherwise immediately close what this just opened.
+              onClick={item.label === "חיפוש" ? (e) => { e.preventDefault(); e.stopPropagation(); onSearchToggle(); } : undefined}
+            />
+          ))}
+          <span className="inline-block text-[#28282a]" style={CURRENT_UNDERLINE}>
+            אודות
+          </span>
+        </nav>
+      );
+    }
+
+    const SEARCH_FADE_MS = 180;
+    const SEARCH_PLACEHOLDER = "חפש.י לפי אסופה, יצירה או יוצר.ת...";
+    const SEARCH_MAX_RESULTS = 8;
+    const CARET_BLINK_MS = 530;
+
+    // Matching lives in search-engine.js so this dropdown and the full results
+    // page (search.html) can never disagree about what a query means. It
+    // returns the complete list; the dropdown shows the first
+    // SEARCH_MAX_RESULTS and links the rest through to search.html.
+    function searchArtworks(query) {
+      return window.MuseumSearch.run(query).results;
+    }
+
+    function SearchBar({ open, onClose }) {
+      const [mounted, setMounted] = useState(false);
+      const [visible, setVisible] = useState(false);
+      const [query, setQuery] = useState("");
+      const rafIds = useRef([]);
+      const closeTimer = useRef(null);
+      const wrapperRef = useRef(null);
+      const inputRef = useRef(null);
+      const allResults = searchArtworks(query);
+      const results = allResults.slice(0, SEARCH_MAX_RESULTS);
+
+      function goToResult(art) {
+        window.location.href = "artwork.html?id=" + art.id;
+      }
+
+      // Fake caret matching the stroke's own weight (scalePx(4)) — the real
+      // <input> keeps native focus/selection/typing, but its own caret is
+      // hidden (caret-color: transparent) since browsers don't expose a way
+      // to make that thin native bar match our 4px line. This bar is
+      // repositioned by measuring the pre-cursor substring on a scratch
+      // canvas (matching the input's own live computed font), same
+      // measure-in-browser technique used throughout this file for text
+      // fitting — cheap enough to run on every keystroke.
+      const [caretOffset, setCaretOffset] = useState(0);
+      const [caretOn, setCaretOn] = useState(true);
+      const [caretFocused, setCaretFocused] = useState(false);
+      const measureCtxRef = useRef(null);
+      const blinkTimerRef = useRef(null);
+
+      function measureCaret() {
+        const el = inputRef.current;
+        if (!el) return;
+        if (!measureCtxRef.current) measureCtxRef.current = document.createElement("canvas").getContext("2d");
+        const cs = getComputedStyle(el);
+        measureCtxRef.current.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+        setCaretOffset(measureCtxRef.current.measureText(el.value.slice(0, pos)).width);
+      }
+
+      function restartBlink() {
+        setCaretOn(true);
+        clearInterval(blinkTimerRef.current);
+        blinkTimerRef.current = setInterval(() => setCaretOn((v) => !v), CARET_BLINK_MS);
+      }
+
+      useEffect(() => {
+        if (!caretFocused) { clearInterval(blinkTimerRef.current); return; }
+        restartBlink();
+        return () => clearInterval(blinkTimerRef.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [caretFocused]);
+
+      useEffect(() => {
+        rafIds.current.forEach((id) => cancelAnimationFrame(id));
+        rafIds.current = [];
+        clearTimeout(closeTimer.current);
+        if (open) {
+          setMounted(true);
+          setVisible(false);
+          rafIds.current.push(requestAnimationFrame(() => {
+            rafIds.current.push(requestAnimationFrame(() => setVisible(true)));
+          }));
+        } else if (mounted) {
+          setVisible(false);
+          setQuery("");
+          if (inputRef.current) inputRef.current.value = "";
+          closeTimer.current = setTimeout(() => setMounted(false), SEARCH_FADE_MS);
+        }
+        return () => {
+          rafIds.current.forEach((id) => cancelAnimationFrame(id));
+          rafIds.current = [];
+          clearTimeout(closeTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [open]);
+
+      useEffect(() => {
+        if (open && visible && inputRef.current) inputRef.current.focus();
+      }, [open, visible]);
+
+      // Click-away and Escape both close it. This listens on "click" (not
+      // "mousedown") specifically so the toggle's own stopPropagation — fired
+      // during the same click event — can suppress it; a mousedown listener
+      // would fire on a different, earlier event and miss that suppression.
+      useEffect(() => {
+        if (!open) return;
+        function onDocClick(e) {
+          if (wrapperRef.current && !wrapperRef.current.contains(e.target)) onClose();
+        }
+        function onKeyDown(e) {
+          if (e.key === "Escape") onClose();
+          if (e.key === "Enter") {
+            // Enter goes to the full results list rather than jumping straight
+            // into the top hit — a query like "אדום" has 27 matches and the
+            // dropdown only ever shows 8 of them.
+            window.location.href = window.MuseumSearch.urlFor(inputRef.current ? inputRef.current.value : "");
+          }
+        }
+        document.addEventListener("click", onDocClick);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+          document.removeEventListener("click", onDocClick);
+          document.removeEventListener("keydown", onKeyDown);
+        };
+      }, [open, onClose]);
+
+      if (!mounted) return null;
+
+      return (
+        <div
+          ref={wrapperRef}
+          className="absolute pointer-events-auto"
+          style={{
+            left: 0,
+            right: 0,
+            top: scalePx(0),
+            height: scalePx(70),
+            zIndex: 50,
+            backgroundColor: "#fffdfa",
+            opacity: visible ? 1 : 0,
+            transition: `opacity ${SEARCH_FADE_MS}ms ease`,
+          }}
+        >
+          <div
+            className="absolute"
+            style={{ left: 0, right: 0, top: scalePx(66), borderBottom: `${scalePx(4)} solid #28282a` }}
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            dir="rtl"
+            placeholder={SEARCH_PLACEHOLDER}
+            className="absolute bg-transparent outline-none text-right placeholder:text-[#28282a]"
+            style={{
+              right: scalePx(15),
+              left: scalePx(15),
+              top: scalePx(10),
+              height: scalePx(56),
+              fontFamily: FONT_THEBASICS,
+              fontWeight: 500,
+              fontSize: scalePx(58),
+              lineHeight: 1.21,
+              color: "#28282a",
+              caretColor: "transparent",
+            }}
+            onFocus={() => { setCaretFocused(true); setQuery(inputRef.current.value); measureCaret(); restartBlink(); }}
+            onBlur={() => setCaretFocused(false)}
+            onInput={(e) => { setQuery(e.target.value); measureCaret(); restartBlink(); }}
+            onKeyUp={() => { measureCaret(); restartBlink(); }}
+            onClick={() => { measureCaret(); restartBlink(); }}
+          />
+          {caretFocused && query && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                right: `calc(${scalePx(15)} + ${caretOffset}px)`,
+                top: scalePx(8),
+                height: scalePx(48),
+                width: scalePx(4),
+                backgroundColor: "#28282a",
+                opacity: caretOn ? 1 : 0,
+              }}
+            />
+          )}
+          {query.trim() && (
+            <div
+              className="absolute"
+              style={{
+                left: 0,
+                right: 0,
+                top: scalePx(70),
+                backgroundColor: "#fffdfa",
+              }}
+            >
+              {results.length === 0 ? (
+                <div
+                  dir="rtl"
+                  className="text-right"
+                  style={{
+                    padding: `${scalePx(18)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  אין תוצאות
+                </div>
+              ) : (
+                results.map((art, i) => (
+                  <div
+                    key={art.id}
+                    dir="rtl"
+                    onClick={() => goToResult(art)}
+                    className="flex items-baseline justify-between cursor-pointer"
+                    style={{
+                      padding: `${scalePx(14)} ${scalePx(15)}`,
+                      borderBottom: (i < results.length - 1 || allResults.length > results.length) ? "1px solid rgba(40, 40, 42, 0.2)" : "none",
+                      fontFamily: FONT_THEBASICS,
+                    }}
+                  >
+                    <span style={{ fontWeight: 500, fontSize: scalePx(22) }}>
+                      {art.title}
+                      {art.artist && (
+                        <span style={{ fontWeight: 400, color: "rgba(40, 40, 42, 0.6)" }}> {art.artist}</span>
+                      )}
+                    </span>
+                    <span style={{ fontSize: scalePx(16), color: "rgba(40, 40, 42, 0.5)", flexShrink: 0, marginInlineStart: scalePx(12) }}>
+                      {art.motif}
+                    </span>
+                  </div>
+                ))
+              )}
+              {allResults.length > results.length && (
+                <div
+                  dir="rtl"
+                  onClick={() => { window.location.href = window.MuseumSearch.urlFor(query); }}
+                  className="text-right cursor-pointer"
+                  style={{
+                    padding: `${scalePx(14)} ${scalePx(15)}`,
+                    fontFamily: FONT_THEBASICS,
+                    fontSize: scalePx(20),
+                    color: "rgba(40, 40, 42, 0.6)",
+                  }}
+                >
+                  {`כל התוצאות (${allResults.length})`}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Footer positions match the Figma frame (1514px total canvas height).
+    const FOOTER_PARAGRAPH_TOP = 1194;
+    const FOOTER_LINKS_TOP = 1242;
+    const FOOTER_WORDMARK_TOP = 1317;
+    const CANVAS_H = 1514;
+
+    function App() {
+      const [fadeIn, setFadeIn] = useState(false);
+      const [searchOpen, setSearchOpen] = useState(false);
+      useEffect(() => {
+        const t = setTimeout(() => setFadeIn(true), 60);
+        return () => clearTimeout(t);
+      }, []);
+
+      // Hovering the "אוספי מוזיאון ישראל" headline link plays a montage
+      // video over the paragraph — muted/looping so it behaves like a gif,
+      // autoPlay only kicks in once mounted (browsers block it pre-interaction
+      // otherwise) and it's paused/rewound on leave rather than unmounted, so
+      // re-hovering doesn't pay the decode cost again mid-hover-in.
+      const [wordmarkHovered, setWordmarkHovered] = useState(false);
+      const dimStyle = { opacity: wordmarkHovered ? 0 : 1, transition: "opacity 300ms ease" };
+      const hoverVideoRef = useRef(null);
+      useEffect(() => {
+        const el = hoverVideoRef.current;
+        if (!el) return;
+        if (wordmarkHovered) {
+          el.currentTime = 0;
+          el.play().catch(() => {});
+        } else {
+          el.pause();
+        }
+      }, [wordmarkHovered]);
+
+      return (
+        <div className="min-h-screen w-full bg-[#fffdfa] relative" dir="rtl">
+          <div id="ab-header-overlay" className="fixed inset-x-0 top-0 z-30 flex justify-center pointer-events-none" style={dimStyle}>
+            <div className={"relative " + CANVAS_W}>
+              <div className="absolute pointer-events-auto" style={{ insetInlineEnd: scalePx(24), top: scalePx(32) }}>
+                <TopNav onSearchToggle={() => setSearchOpen((v) => !v)} />
+              </div>
+              <HeaderWordmarkLink style={{ right: scalePx(24), top: scalePx(31), width: scalePx(247), height: scalePx(25) }} />
+              <SearchBar open={searchOpen} onClose={() => setSearchOpen(false)} />
+            </div>
+          </div>
+
+          <div
+            id="ab-canvas"
+            className={"relative mx-auto " + CANVAS_W}
+            style={{
+              height: scalePx(CANVAS_H),
+              overflow: "clip",
+              opacity: fadeIn ? 1 : 0,
+              transition: "opacity 500ms ease",
+              marginTop: scalePx(10),
+            }}
+          >
+            {/* 20 leading non-breaking spaces, set at the paragraph's own big
+                font size, reserve blank room at the very start of the first
+                (right-aligned) line — "על המוזיאון" then sits absolutely
+                inside that reserved gap instead of stacking above the
+                paragraph as its own line (same technique as index.html's
+                AboutSection). */}
+            <p
+              id="ab-eyebrow"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                right: scalePx(24),
+                top: scalePx(255),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "-0.4px",
+                ...dimStyle,
+              }}
+            >
+              על המוזיאון
+            </p>
+
+            {/* The headline is the wordmark itself, underlined and clickable
+                back to index.html (see user request), flowing straight into
+                the same about-copy used in every page's footer — just set at
+                this page's full display size instead of the 20px footer
+                treatment. */}
+            <p
+              id="ab-intro"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                right: scalePx(24),
+                top: scalePx(230),
+                width: scalePx(1680),
+                lineHeight: 1.25,
+                letterSpacing: "-1.188px",
+              }}
+            >
+              <span style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(59.4), ...dimStyle }}>
+                {" ".repeat(20)}
+              </span>
+              <a
+                href="index.html"
+                className="inline-block"
+                onMouseEnter={() => setWordmarkHovered(true)}
+                onMouseLeave={() => setWordmarkHovered(false)}
+                onClick={() => sessionStorage.setItem("skipIntro", "1")}
+                style={{ textDecoration: "none", ...CURRENT_UNDERLINE, fontFamily: FONT_MASADA, fontSize: scalePx(59.4), color: "#28282a" }}
+              >
+                אוספי מוזיאון ישראל
+              </a>
+              <span style={{ fontFamily: FONT_THEBASICS, fontSize: scalePx(59.4), ...dimStyle }}>
+                {" "}מונים כ-500 אלף פריטים המשתרעים על כל קשת התרבות החומרית, מהפרהיסטוריה ועד ימינו. האוסף מאורגן בשלושה אגפים מרכזיים — ארכאולוגיה, אמנות, ואמנות יהודית — וכולל את האחזקות הגדולות בעולם של ארכאולוגיה מקראית וארץ-ישראלית, לצד אמנות יפה, צילום, עיצוב, אתנוגרפיה וחפצי פולחן. בתוכו נמצאים גם כמה מהפריטים המוכרים בעולם, ובהם מגילות ים המלח שבהיכל הספר ומודל ירושלים מימי הבית השני. מוזיאון ישראל, שנוסד ב-1965, הוא המוזיאון הלאומי של ישראל והמוסד התרבותי הגדול במדינה.
+              </span>
+            </p>
+
+            {/* Montage that plays while hovering the headline link above.
+                Sits below the paragraph, spanning the same right-aligned
+                column, muted+looping so it reads as a gif despite being an
+                mp4 — pointer-events-none so it never steals the hover off
+                the link/paragraph text sitting over it. */}
+            <video
+              ref={hoverVideoRef}
+              src="public/videos/הכל.mp4"
+              muted
+              loop
+              playsInline
+              className="absolute pointer-events-none"
+              style={{
+                left: 0,
+                right: 0,
+                top: scalePx(310),
+                width: "100%",
+                height: scalePx(900),
+                objectFit: "cover",
+                opacity: wordmarkHovered ? 1 : 0,
+                transition: "opacity 300ms ease",
+              }}
+            />
+
+            <div
+              id="ab-footer-about"
+              className="absolute"
+              style={{
+                left: scalePx(88),
+                top: scalePx(FOOTER_LINKS_TOP),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+                ...dimStyle,
+              }}
+            >
+              <NavLink label="אודות" href="about.html" />
+            </div>
+            <div
+              id="ab-footer-contact"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                left: scalePx(200),
+                top: scalePx(FOOTER_LINKS_TOP),
+                width: scalePx(240),
+                fontFamily: FONT_THEBASICS,
+                fontSize: scalePx(20),
+                letterSpacing: "0.2px",
+                ...dimStyle,
+              }}
+            >
+              <NavLink label="יצירת קשר" href="#contact" />
+            </div>
+            <p
+              id="ab-footer-paragraph"
+              className="absolute text-right"
+              dir="rtl"
+              style={{
+                right: scalePx(24),
+                top: scalePx(FOOTER_PARAGRAPH_TOP),
+                width: scalePx(875),
+                fontWeight: 500,
+                fontSize: scalePx(20),
+                lineHeight: 1.21,
+                letterSpacing: "-0.02em",
+                ...dimStyle,
+              }}
+            >
+              <span style={{ fontFamily: FONT_MASADA }}>אוספי מוזיאון ישראל</span>
+              <span style={{ fontFamily: FONT_THEBASICS }}> מונים כ-500 אלף פריטים המשתרעים על כל קשת התרבות החומרית, מהפרהיסטוריה ועד ימינו. האוסף מאורגן בשלושה אגפים מרכזיים — ארכאולוגיה, אמנות, ואמנות יהודית — וכולל את האחזקות הגדולות בעולם של ארכאולוגיה מקראית וארץ-ישראלית, לצד אמנות יפה, צילום, עיצוב, אתנוגרפיה וחפצי פולחן.</span>
+            </p>
+            <AnimatedFooterWordmark
+              id="ab-footer-wordmark"
+              style={{
+                left: scalePx(27),
+                top: scalePx(FOOTER_WORDMARK_TOP),
+                width: scalePx(1679),
+                height: scalePx(170),
+                ...dimStyle,
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
