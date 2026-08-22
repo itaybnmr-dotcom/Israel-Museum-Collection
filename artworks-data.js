@@ -1349,7 +1349,7 @@ window.ARTWORKS = [
     id: "quipu",
     order: 19,
     motif: "מעגל",
-    title: "׳קיפו׳", titleLineHeight: 0.95,
+    title: "זהב", titleLineHeight: 0.95,
     image: "public/images/collections/img11.webp",
     ar: 1460 / 1122,
     body: [
