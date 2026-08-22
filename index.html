@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style id="__paintgate">body{opacity:0}</style>
   <title>אוספי מוזיאון ישראל</title>
   <meta name="description" content="אוספי מוזיאון ישראל באינטרנט — כ-500 אלף פריטים מארכיאולוגיה, אמנות ואמנות יהודית, מוצגים בחמש אסופות נושאיות." />
   <link rel="icon" type="image/svg+xml" href="public/images/favicon.svg" />
@@ -16,7 +17,7 @@
        repro outside this file, it's a Tailwind Play CDN limitation, not a
        typo here. The FONT_* constants below (applied via inline style
        instead of a Tailwind class) are the actual fix. -->
-  <link rel="stylesheet" href="tailwind.css">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @view-transition {
       navigation: auto;
@@ -101,5 +102,7 @@
   <div id="root"></div>
 
   <script src="index.app.js"></script>
+
+  <script>(function(){var done=false;function reveal(){if(done)return;done=true;var b=document.body;if(b){b.style.transition="opacity .25s ease";b.style.opacity="1";}}function ready(){try{var p=document.createElement("div");p.className="absolute";p.setAttribute("aria-hidden","true");document.body.appendChild(p);var ok=getComputedStyle(p).position==="absolute";p.remove();if(!ok)return requestAnimationFrame(ready);}catch(e){}var r=document.getElementById("root");if(r&&r.children.length===0)return requestAnimationFrame(ready);reveal();}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);else ready();setTimeout(reveal,3000);})();</script>
 </body>
 </html>
