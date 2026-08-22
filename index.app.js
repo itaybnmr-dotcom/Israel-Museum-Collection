@@ -553,7 +553,7 @@ function Hero({
     loop: true,
     muted: true,
     playsInline: true,
-    onMouseEnter: started ? undefined : onExpand,
+    onMouseMove: started ? undefined : onExpand,
     onClick: started ? undefined : onExpand,
     className: "absolute object-cover",
     style: {
