@@ -10,6 +10,18 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <!-- Static snapshot of Tailwind's generated utility CSS, loaded as a
+       real stylesheet before the CDN script below. The Play CDN script
+       generates its CSS client-side by scanning the DOM after React
+       mounts, which leaves a real window where elements using classes
+       like "absolute" or "flex" for actual layout render unpositioned
+       until it catches up — usually invisible on a fast local server,
+       but visible as a broken/unstyled flash on a slower connection.
+       This link tag is render-blocking (guaranteed present on first
+       paint) and covers every utility class this site actually uses;
+       the CDN script stays below as a safety net for anything it
+       doesn't. -->
+  <link rel="stylesheet" href="tailwind.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="artworks-data.js"></script>
   <script src="search-engine.js"></script>
