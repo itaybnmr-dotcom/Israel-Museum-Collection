@@ -1349,7 +1349,7 @@ window.ARTWORKS = [
     id: "quipu",
     order: 19,
     motif: "מעגל",
-    title: "זהב", titleLineHeight: 0.95,
+    title: "׳קיפו׳", titleLineHeight: 0.95,
     image: "public/images/collections/img11.webp",
     ar: 1460 / 1122,
     body: [
@@ -1371,7 +1371,7 @@ window.ARTWORKS = [
     ],
     meta: ["חוטי צמר וכותנה קשורים", "תרבות האינקה, 1532-1400"],
     dimensions: "(גובה 27 ס\"מ, רוחב 30 ס\"מ)",
-    tags: ["מעגל", "אדום", "בד וטקסטיל"],
+    tags: ["מעגל", "זהב", "בד וטקסטיל"],
   },
   {
     id: "beheaded-sun",

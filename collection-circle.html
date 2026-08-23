@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style id="__paintgate">body{opacity:0}</style>
   <title>אוספי מוזיאון ישראל</title>
   <meta name="description" content="אסופת מעגל — יצירות מתוך אוספי מוזיאון ישראל המאורגנות סביב מוטיב העיגול." />
   <link rel="icon" type="image/svg+xml" href="public/images/favicon.svg" />
@@ -25,6 +24,7 @@
        paint) and covers every utility class this site actually uses;
        the CDN script stays below as a safety net for anything it
        doesn't. -->
+  <link rel="stylesheet" href="tailwind.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="artworks-data.js"></script>
   <script src="search-engine.js"></script>
@@ -573,14 +573,19 @@
         description: "טבעת כסף מן המאה ה-7 לפנה״ס, עשויה חוט מתכת יחיד שעוקף את האצבע ביותר מהיקף שלם...", descWidthFrac: 0.83,
       },
       { id: "optical-parable", x: 1129, y: 3913, w: 725, h: 580, image: "public/images/collections/img13.webp", title: "משל אופטי", subtitle: "מנואל אלוורס-בראבו, 1931", description: "משל אופטי היא יצירה מפורסמת של הצלם המקסיקני מנואל אלווראס בראבו משנת 1931, המציגה חלון ראווה של חנות אופטיקה עם אלמנטים של עיניים...", descWidthFrac: 0.85, descOffsetX: 18 },
+      // capDY: img12.webp has a thin white margin top and bottom (measured
+      // with PIL, ~3.6%/3.8% of the photo) before the field itself starts —
+      // matches CONTENT_FRAC_Y["img12.webp"] below, converted to this box's
+      // rendered image height (418px) so the caption hugs the field's real
+      // bottom edge instead of the padded photo's.
       {
         id: "negev", x: 25, y: 1796, w: 568, h: 440, image: "public/images/collections/img12.webp",
-        title: "נגב", subtitle: "מגדלנה אבאקונוביץ׳, 1987", capDY: -17,
+        title: "נגב", subtitle: "מגדלנה אבאקונוביץ׳, 1987", capDY: -16,
         description: "ביומה הראשון של אבאקנוביץ״ בירושלים, באפריל 1987, היא התרשמה עמוקות ממראה אבן הגיר המקומית...", descWidthFrac: 0.68, descOffsetX: 12, descOffsetY: 12,
       },
       {
         id: "quipu", x: 1226, y: 1496, w: 546, h: 425, image: "public/images/collections/img11.webp",
-        title: "זהב", subtitle: "1400-1532",
+        title: "׳קיפו׳", subtitle: "1400-1532",
         description: "מערך זה של חבלים קשורים היה יקר־ערך בשל המידע שהוצפן בו...", descWidthFrac: 0.75, descOffsetX: 18,
       },
       {
@@ -615,7 +620,7 @@
       },
       {
         id: "pastilli-chair", x: 691, y: 5273, w: 740, h: 561, image: "public/images/collections/img4.webp",
-        title: "כיסא ״פסטיל״", subtitle: "אירו ארניו, 1967", capDY: -10,
+        title: "כיסא ״פסטיל״", subtitle: "אירו ארניו, 1967",
         description: "בראשית שנות ה־60 ובמסגרת התרחקותו ממוסכמות העיצוב המסורתיות ערך אירו ארניו...", descWidthFrac: 0.6, descOffsetX: 18,
       },
     ];
@@ -636,13 +641,13 @@
     // under the neighboring painting). Measured per file with PIL. Images
     // not listed are full-bleed → default [0, 1].
     const CONTENT_FRAC = {
-      "img1.png": [0.249, 0.748], "img3.png": [0.115, 0.885], "img5.png": [0.197, 0.803],
-      "img8.png": [0.200, 0.797], "img10.png": [0.195, 0.805], "img11.png": [0.126, 0.874],
-      "img13.png": [0.208, 0.789], "img14.png": [0.071, 0.929], "img15.png": [0.104, 0.893],
-      "img20.png": [0.200, 0.797], "img21.png": [0.195, 0.805], "img22.png": [0.115, 0.882],
-      "img24.png": [0.241, 0.759], "img25.png": [0.052, 0.948], "img26.png": [0.227, 0.773],
-      "img27.png": [0.123, 0.874], "img28.png": [0.121, 0.879], "img30.png": [0.090, 0.910],
-      "img6.png": [0.023, 0.975],
+      "img1.webp": [0.249, 0.748], "img3.webp": [0.115, 0.885], "img5.webp": [0.197, 0.803],
+      "img8.webp": [0.200, 0.797], "img10.webp": [0.195, 0.805], "img11.webp": [0.126, 0.874],
+      "img13.webp": [0.208, 0.789], "img14.webp": [0.071, 0.929], "img15.webp": [0.104, 0.893],
+      "img20.webp": [0.200, 0.797], "img21.webp": [0.195, 0.805], "img22.webp": [0.115, 0.882],
+      "img24.webp": [0.241, 0.759], "img25.webp": [0.052, 0.948], "img26.webp": [0.227, 0.773],
+      "img27.webp": [0.123, 0.874], "img28.webp": [0.121, 0.879], "img30.webp": [0.090, 0.910],
+      "img6.webp": [0.023, 0.975],
     };
 
     // Same idea as CONTENT_FRAC but for vertical padding (top/bottom
@@ -653,8 +658,9 @@
     // padded box and bled into whatever overlapping neighbor sat in that
     // empty space. Images not listed default to [0, 1] (no vertical trim).
     const CONTENT_FRAC_Y = {
-      "img7.png": [0.307, 0.693],
-      "img25.png": [0.205, 0.790],
+      "img7.webp": [0.307, 0.693],
+      "img25.webp": [0.205, 0.790],
+      "img12.webp": [0.036, 0.962],
     };
 
     // Resolve where the photo actually renders inside a card's w×h box:
@@ -694,7 +700,7 @@
     // The nudge itself caused a real clash by pushing negev into the
     // carnelian-bead card below, so it's gone. Kept as a mechanism in case
     // a genuine clash ever needs a targeted fix.
-    const Y_NUDGE = {};
+    const Y_NUDGE = { "silver-hoard-bead": -11, "jericho-first": 25 };
 
     function layoutCards(cards) {
       return cards.map((card) => ({
@@ -1743,7 +1749,7 @@
               the same underline-sweep hover as every other piece of text on
               the site, rather than plain static spans. */}
           <div
-            className="absolute flex justify-between"
+            className="absolute"
             dir="rtl"
             style={{
               left: scalePx(capLeft),
@@ -1753,6 +1759,7 @@
               fontFamily: FONT_THEBASICS,
               fontWeight: 500,
               fontSize: scalePx(16),
+              lineHeight: scalePx(17),
               // Hidden outright (not just dimmed like the rest of a
               // filtered-out card) while the hover-magnet preview is active
               // — the title/date clutter the enlarged, overlapping preview
@@ -1764,8 +1771,15 @@
               transition: "opacity 180ms ease",
             }}
           >
-            <HoverWord label={card.title} active={hovered} />
-            <HoverWord label={card.subtitle} active={hovered} />
+            <div className="flex justify-between">
+              <HoverWord label={card.title} active={hovered} />
+              <span style={{whiteSpace: "nowrap"}}>
+                <HoverWord label={card.subtitle} active={hovered} />
+              </span>
+            </div>
+            {card.titleLine2 && (
+              <div><HoverWord label={card.titleLine2} active={hovered} /></div>
+            )}
           </div>
         </div>
       );
@@ -1970,7 +1984,7 @@
             )}
           </div>
           <div
-            className="relative flex justify-between"
+            className="relative"
             dir="rtl"
             style={{
               zIndex: 1,
@@ -1981,10 +1995,18 @@
               fontFamily: FONT_THEBASICS,
               fontWeight: 500,
               fontSize: scalePx(16),
+              lineHeight: scalePx(17),
             }}
           >
-            <HoverWord label={card.title} active={hovered} />
-            <HoverWord label={card.subtitle} active={hovered} />
+            <div className="flex justify-between">
+              <HoverWord label={card.title} active={hovered} />
+              <span style={{whiteSpace: "nowrap"}}>
+                <HoverWord label={card.subtitle} active={hovered} />
+              </span>
+            </div>
+            {card.titleLine2 && (
+              <div><HoverWord label={card.titleLine2} active={hovered} /></div>
+            )}
           </div>
         </div>
       );
@@ -2259,7 +2281,5 @@
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
-
-  <script>(function(){var done=false;function reveal(){if(done)return;done=true;var b=document.body;if(b){b.style.transition="opacity .25s ease";b.style.opacity="1";}}function ready(){try{var p=document.createElement("div");p.className="absolute";p.setAttribute("aria-hidden","true");document.body.appendChild(p);var ok=getComputedStyle(p).position==="absolute";p.remove();if(!ok)return requestAnimationFrame(ready);}catch(e){}var r=document.getElementById("root");if(r&&r.children.length===0)return requestAnimationFrame(ready);reveal();}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);else ready();setTimeout(reveal,3000);})();</script>
 </body>
 </html>

@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style id="__paintgate">body{opacity:0}</style>
   <title>אוספי מוזיאון ישראל</title>
   <meta name="description" content="אסופת אנכיות — יצירות מתוך אוספי מוזיאון ישראל המאורגנות סביב מוטיב האנכיות." />
   <link rel="icon" type="image/svg+xml" href="public/images/favicon.svg" />
@@ -21,6 +20,7 @@
        paint) and covers every utility class this site actually uses;
        the CDN script stays below as a safety net for anything it
        doesn't. -->
+  <link rel="stylesheet" href="tailwind.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="artworks-data.js"></script>
   <script src="search-engine.js"></script>
@@ -1507,7 +1507,5 @@
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
-
-  <script>(function(){var done=false;function reveal(){if(done)return;done=true;var b=document.body;if(b){b.style.transition="opacity .25s ease";b.style.opacity="1";}}function ready(){try{var p=document.createElement("div");p.className="absolute";p.setAttribute("aria-hidden","true");document.body.appendChild(p);var ok=getComputedStyle(p).position==="absolute";p.remove();if(!ok)return requestAnimationFrame(ready);}catch(e){}var r=document.getElementById("root");if(r&&r.children.length===0)return requestAnimationFrame(ready);reveal();}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);else ready();setTimeout(reveal,3000);})();</script>
 </body>
 </html>

@@ -4,6 +4,22 @@ const {
   useEffect
 } = React;
 
+// This page's intro assumes it always starts at scrollY 0 (see App's
+// scroll-lock effect and useScrolledPastTop below) — true for a fresh
+// navigation, but NOT for a reload: Chrome's default scroll restoration
+// re-applies whatever scroll position the page had *before* the reload,
+// and does so via a real 'scroll' event fired once the page is tall
+// enough to reach it — after React has already mounted and attached its
+// listeners. That stale scrollY both shifts the hero (in normal document
+// flow) up by the restored amount, and independently satisfies
+// useScrolledPastTop's threshold, revealing the wordmark title before
+// the intro ever plays. Opting out of restoration and forcing scrollY
+// back to 0 up front (before React mounts) closes both symptoms at once.
+if ("scrollRestoration" in history) {
+  history.scrollRestoration = "manual";
+}
+window.scrollTo(0, 0);
+
 // Applied via inline style, not a Tailwind class — see the note by the
 // <script src=".../tailwindcss.com"> tag for why a font-masada-style
 // utility class silently wouldn't have worked here.
